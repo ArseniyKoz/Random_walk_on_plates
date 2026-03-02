@@ -20,6 +20,7 @@ public:
     const std::vector<double>& b() const noexcept { return b_; }
 
     std::size_t num_faces() const noexcept;
+    void signed_distances_inplace(const math::Vec3& x, std::vector<double>& out) const;
     std::vector<double> signed_distances(const math::Vec3& x) const;
     bool is_inside_or_on(const math::Vec3& x, double eps_in = 0.0) const;
     std::size_t closest_outside_face_index(const math::Vec3& x, double eps_in = 0.0) const;

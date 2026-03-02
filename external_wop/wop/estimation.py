@@ -71,6 +71,7 @@ def estimate_from_trajectories(
         raise ValueError("n_paths must be positive.")
 
     acc = _EstimateAccumulator()
+    add = acc.add
     for _ in range(n_paths):
-        acc.add(trace_once())
+        add(trace_once())
     return acc.finalize(n_paths)

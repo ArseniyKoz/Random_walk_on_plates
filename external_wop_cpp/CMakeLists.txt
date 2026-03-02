@@ -15,6 +15,7 @@ add_library(wop_core STATIC
     src/rng/rng.cpp
     src/sampling/sampling.cpp
     src/estimation/estimation.cpp
+    src/solver/wop_solver_internal.cpp
     src/solver/wop_solver.cpp
     src/solver/wos_box_solver.cpp
 )
@@ -49,4 +50,10 @@ if(WOP_BUILD_TESTS)
     )
     target_link_libraries(wop_sampling_stats_tests PRIVATE wop_core)
     add_test(NAME wop_sampling_stats_tests COMMAND wop_sampling_stats_tests)
+
+    add_executable(wop_pipeline_stages_tests
+        tests/test_wop_pipeline_stages.cpp
+    )
+    target_link_libraries(wop_pipeline_stages_tests PRIVATE wop_core)
+    add_test(NAME wop_pipeline_stages_tests COMMAND wop_pipeline_stages_tests)
 endif()

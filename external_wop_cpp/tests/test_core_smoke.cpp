@@ -7,6 +7,7 @@
 
 #include "wop/estimation/estimation.hpp"
 #include "wop/geometry/box.hpp"
+#include "wop/solver/wop_solver.hpp"
 #include "wop/solver/wos_box_solver.hpp"
 
 namespace {
@@ -40,6 +41,51 @@ void test_geometry() {
     const auto y2 = wop::geometry::closest_point_on_box_boundary(wop::math::Vec3{0.2, 0.3, 0.4}, mn, mx);
     const bool on_boundary = close(std::abs(y2.x), 1.0) || close(std::abs(y2.y), 1.0) || close(std::abs(y2.z), 1.0);
     require(on_boundary, "closest boundary for inside point must lie on boundary");
+}
+
+void test_signed_distances_inplace_matches_allocating_version() {
+    const wop::math::Vec3 mn{-1.0, -1.0, -1.0};
+    const wop::math::Vec3 mx{1.0, 1.0, 1.0};
+    auto poly = wop::geometry::make_axis_aligned_box(mn, mx);
+    poly = wop::geometry::orient_normals(poly, wop::math::Vec3{0.0, 0.0, 0.0});
+
+    const wop::math::Vec3 x{3.0, 0.5, -0.2};
+    const auto d_ref = poly.signed_distances(x);
+
+    std::vector<double> d_buf(1, 123.0);
+    poly.signed_distances_inplace(x, d_buf);
+
+    require(d_buf.size() == d_ref.size(), "signed_distances_inplace size mismatch");
+    for (std::size_t i = 0; i < d_ref.size(); ++i) {
+        require(close(d_buf[i], d_ref[i]), "signed_distances_inplace value mismatch");
+    }
+}
+
+void test_wop_escapes_immediately_on_rmax_boundary() {
+    const wop::math::Vec3 mn{-1.0, -1.0, -1.0};
+    const wop::math::Vec3 mx{1.0, 1.0, 1.0};
+    auto poly = wop::geometry::make_axis_aligned_box(mn, mx);
+    poly = wop::geometry::orient_normals(poly, wop::math::Vec3{0.0, 0.0, 0.0});
+
+    const wop::math::Vec3 x0{3.0, 0.0, 0.0};
+    auto boundary_f = [](const wop::math::Vec3&, std::optional<int>) { return 1.0; };
+
+    wop::rng::Rng rng(12345);
+    const auto tr = wop::solver::trace_wop_trajectory(
+        poly,
+        x0,
+        boundary_f,
+        rng,
+        1e-12,
+        1e-12,
+        1e-14,
+        1000,
+        -7.0,
+        3.0);
+
+    require(tr.status == "escaped", "trajectory should escape on r_max boundary");
+    require(tr.steps == 0, "trajectory should escape before first move");
+    require(close(tr.value, -7.0), "escaped trajectory should return u_inf");
 }
 
 void test_estimation_aggregator() {
@@ -85,6 +131,8 @@ void test_wos_smoke() {
 int main() {
     try {
         test_geometry();
+        test_signed_distances_inplace_matches_allocating_version();
+        test_wop_escapes_immediately_on_rmax_boundary();
         test_estimation_aggregator();
         test_wos_smoke();
         std::cout << "wop_core_smoke_tests: OK\n";

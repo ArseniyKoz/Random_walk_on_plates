@@ -1,67 +1,12 @@
 #include "wop/solver/wop_solver.hpp"
 
-#include <algorithm>
-#include <cmath>
-#include <limits>
 #include <stdexcept>
 #include <vector>
 
 #include "wop/sampling/sampling.hpp"
+#include "wop/solver/wop_solver_internal.hpp"
 
 namespace wop::solver {
-
-namespace {
-
-std::size_t argmin_abs(const std::vector<double>& values) {
-    if (values.empty()) {
-        throw std::invalid_argument("argmin_abs requires non-empty input.");
-    }
-    std::size_t idx = 0;
-    double best = std::abs(values[0]);
-    for (std::size_t i = 1; i < values.size(); ++i) {
-        const double cur = std::abs(values[i]);
-        if (cur < best) {
-            best = cur;
-            idx = i;
-        }
-    }
-    return idx;
-}
-
-std::size_t argmin_outside(const std::vector<double>& values, double eps_in) {
-    std::size_t idx = values.size();
-    double best = std::numeric_limits<double>::infinity();
-    for (std::size_t i = 0; i < values.size(); ++i) {
-        if (values[i] > eps_in && values[i] < best) {
-            best = values[i];
-            idx = i;
-        }
-    }
-    if (idx == values.size()) {
-        throw std::invalid_argument("No outside face found.");
-    }
-    return idx;
-}
-
-bool any_outside(const std::vector<double>& values, double eps_in) {
-    return std::any_of(values.begin(), values.end(), [eps_in](double d) { return d > eps_in; });
-}
-
-double sample_plane_radius(double d, rng::Rng& rng, double min_one_minus_alpha) {
-    if (d <= 0.0) {
-        throw std::invalid_argument("d must be positive.");
-    }
-    if (min_one_minus_alpha <= 0.0) {
-        throw std::invalid_argument("min_one_minus_alpha must be positive.");
-    }
-
-    const double alpha = rng.uniform01();
-    const double one_minus_alpha = std::max(1.0 - alpha, min_one_minus_alpha);
-    const double rho_sq = d * d * (1.0 / (one_minus_alpha * one_minus_alpha) - 1.0);
-    return std::sqrt(std::max(rho_sq, 0.0));
-}
-
-}  // namespace
 
 estimation::TrajectoryResult trace_wop_trajectory(
     const geometry::Polyhedron& poly,
@@ -85,13 +30,21 @@ estimation::TrajectoryResult trace_wop_trajectory(
     }
 
     math::Vec3 x = x0;
+    const auto& nu = poly.nu();
+    const auto& b = poly.b();
     std::size_t face_idx = 0;
+    std::vector<double> d_buffer;
+    std::optional<double> r_max_sq = std::nullopt;
+    if (r_max.has_value()) {
+        r_max_sq = (*r_max) * (*r_max);
+    }
     try {
         face_idx = poly.closest_outside_face_index(x, eps_in);
     } catch (const std::invalid_argument&) {
         if (poly.is_inside_or_on(x, eps_in)) {
-            const auto d = poly.signed_distances(x);
-            const std::size_t i0 = argmin_abs(d);
+            poly.signed_distances_inplace(x, d_buffer);
+            const auto scan = detail::scan_distances(d_buffer, eps_in, 0, eps_plane);
+            const std::size_t i0 = scan.argmin_abs;
             return estimation::TrajectoryResult{boundary_f(x, static_cast<int>(i0)), 0, "hit_face"};
         }
         throw std::invalid_argument("x0 must belong to the exterior domain.");
@@ -101,23 +54,24 @@ estimation::TrajectoryResult trace_wop_trajectory(
         if (!math::is_finite(x)) {
             return estimation::TrajectoryResult{u_inf, step - 1, "escaped"};
         }
-        if (r_max.has_value() && math::norm(x) >= *r_max) {
+        if (r_max_sq.has_value() && math::norm2(x) >= *r_max_sq) {
             return estimation::TrajectoryResult{u_inf, step - 1, "escaped"};
         }
 
-        math::Vec3 nu_i = poly.nu()[face_idx];
-        double b_i = poly.b()[face_idx];
+        math::Vec3 nu_i = nu[face_idx];
+        double b_i = b[face_idx];
         double d_i = math::dot(nu_i, x) - b_i;
 
         if (d_i <= eps_in) {
-            const auto d_now = poly.signed_distances(x);
-            if (!any_outside(d_now, eps_in)) {
-                const std::size_t i_hit = argmin_abs(d_now);
+            poly.signed_distances_inplace(x, d_buffer);
+            const auto scan_now = detail::scan_distances(d_buffer, eps_in, face_idx, eps_plane);
+            if (!scan_now.any_outside) {
+                const std::size_t i_hit = scan_now.argmin_abs;
                 return estimation::TrajectoryResult{boundary_f(x, static_cast<int>(i_hit)), step - 1, "hit_face"};
             }
-            face_idx = argmin_outside(d_now, eps_in);
-            nu_i = poly.nu()[face_idx];
-            b_i = poly.b()[face_idx];
+            face_idx = scan_now.argmin_outside;
+            nu_i = nu[face_idx];
+            b_i = b[face_idx];
             d_i = math::dot(nu_i, x) - b_i;
         }
 
@@ -129,26 +83,25 @@ estimation::TrajectoryResult trace_wop_trajectory(
         }
 
         const math::Vec3 p = x - d_i * nu_i;
-        const double rho = sample_plane_radius(d_i, rng, min_abs_denom);
+        const double rho = detail::sample_plane_radius(d_i, rng, min_abs_denom);
         math::Vec3 y = p + rho * w;
         y = y - (math::dot(nu_i, y) - b_i) * nu_i;
         if (!math::is_finite(y)) {
             return estimation::TrajectoryResult{u_inf, step, "escaped"};
         }
 
-        const auto d = poly.signed_distances(y);
-        const bool hit = (std::abs(d[face_idx]) <= eps_plane) &&
-                         std::all_of(d.begin(), d.end(), [eps_in](double value) { return value <= eps_in; });
-        if (hit) {
+        poly.signed_distances_inplace(y, d_buffer);
+        const auto scan = detail::scan_distances(d_buffer, eps_in, face_idx, eps_plane);
+        if (scan.hit_target_face) {
             return estimation::TrajectoryResult{boundary_f(y, static_cast<int>(face_idx)), step, "hit_face"};
         }
 
-        if (!any_outside(d, eps_in)) {
-            const std::size_t i_hit = argmin_abs(d);
+        if (!scan.any_outside) {
+            const std::size_t i_hit = scan.argmin_abs;
             return estimation::TrajectoryResult{boundary_f(y, static_cast<int>(i_hit)), step, "hit_face"};
         }
 
-        face_idx = argmin_outside(d, eps_in);
+        face_idx = scan.argmin_outside;
         x = y;
     }
 

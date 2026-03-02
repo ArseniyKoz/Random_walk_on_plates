@@ -40,9 +40,10 @@ def trace_wos_box_trajectory(
     x = _as_vec3("x0", x0).copy()
     mn = _as_vec3("box_min", box_min)
     mx = _as_vec3("box_max", box_max)
+    r_max_sq = None if r_max is None else float(r_max) * float(r_max)
 
     for step in range(1, max_steps + 1):
-        if r_max is not None and float(np.linalg.norm(x)) >= r_max:
+        if r_max_sq is not None and float(np.dot(x, x)) >= r_max_sq:
             return TrajectoryResult(value=float(u_inf), steps=step - 1, status="escaped")
 
         dist = distance_to_box(x, mn, mx)

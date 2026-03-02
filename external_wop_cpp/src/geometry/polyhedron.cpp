@@ -17,22 +17,6 @@ bool is_unit_norm(double value) {
     return std::abs(value - 1.0) <= (kNormAtol + kNormRtol);
 }
 
-std::size_t argmin_abs(const std::vector<double>& values) {
-    if (values.empty()) {
-        throw std::invalid_argument("argmin_abs requires non-empty input.");
-    }
-    std::size_t idx = 0;
-    double best = std::abs(values[0]);
-    for (std::size_t i = 1; i < values.size(); ++i) {
-        const double cur = std::abs(values[i]);
-        if (cur < best) {
-            best = cur;
-            idx = i;
-        }
-    }
-    return idx;
-}
-
 }  // namespace
 
 Polyhedron::Polyhedron(std::vector<math::Vec3> nu, std::vector<double> b)
@@ -59,12 +43,16 @@ std::size_t Polyhedron::num_faces() const noexcept {
     return b_.size();
 }
 
+void Polyhedron::signed_distances_inplace(const math::Vec3& x, std::vector<double>& out) const {
+    out.resize(num_faces());
+    for (std::size_t i = 0; i < num_faces(); ++i) {
+        out[i] = math::dot(nu_[i], x) - b_[i];
+    }
+}
+
 std::vector<double> Polyhedron::signed_distances(const math::Vec3& x) const {
     std::vector<double> d;
-    d.reserve(num_faces());
-    for (std::size_t i = 0; i < num_faces(); ++i) {
-        d.push_back(math::dot(nu_[i], x) - b_[i]);
-    }
+    signed_distances_inplace(x, d);
     return d;
 }
 

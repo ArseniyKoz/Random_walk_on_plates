@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Callable, Optional
 
 import numpy as np
@@ -13,11 +14,65 @@ FloatArray = NDArray[np.float64]
 BoundaryFunc = Callable[[FloatArray, Optional[int]], float]
 
 
+@dataclass(frozen=True)
+class _DistanceScanInfo:
+    any_outside: bool
+    all_inside: bool
+    argmin_outside: int | None
+    argmin_abs: int
+    hit_target_face: bool
+
+
 def _as_vec3(name: str, x: ArrayLike) -> FloatArray:
     arr = np.asarray(x, dtype=float)
     if arr.shape != (3,):
         raise ValueError(f"{name} must have shape (3,), got {arr.shape}.")
     return arr
+
+
+def _scan_signed_distances(
+    d: FloatArray,
+    eps_in: float,
+    target_idx: int,
+    eps_plane: float,
+) -> _DistanceScanInfo:
+    if d.ndim != 1 or d.size == 0:
+        raise ValueError("d must have shape (M,) with M>0.")
+    if target_idx < 0 or target_idx >= d.size:
+        raise ValueError("target_idx is out of range.")
+
+    any_outside = False
+    all_inside = True
+    argmin_outside: int | None = None
+    best_outside = float(np.inf)
+
+    argmin_abs = 0
+    best_abs = abs(float(d[0]))
+
+    for idx in range(int(d.size)):
+        value = float(d[idx])
+        if value > eps_in:
+            any_outside = True
+            all_inside = False
+            if value < best_outside:
+                best_outside = value
+                argmin_outside = idx
+        elif not np.isfinite(value):
+            all_inside = False
+
+        abs_value = abs(value)
+        if abs_value < best_abs:
+            best_abs = abs_value
+            argmin_abs = idx
+
+    hit_target_face = abs(float(d[target_idx])) <= eps_plane and all_inside
+    return _DistanceScanInfo(
+        any_outside=any_outside,
+        all_inside=all_inside,
+        argmin_outside=argmin_outside,
+        argmin_abs=argmin_abs,
+        hit_target_face=hit_target_face,
+    )
 
 
 def _sample_plane_radius(
@@ -58,13 +113,16 @@ def trace_wop_trajectory(
         raise ValueError("min_abs_denom must be positive.")
 
     x = _as_vec3("x0", x0).copy()
+    nu = poly.nu
+    b = poly.b
+    r_max_sq = None if r_max is None else float(r_max) * float(r_max)
 
     try:
         i = poly.closest_outside_face_index(x, eps_in=eps_in)
     except ValueError:
         if poly.is_inside_or_on(x, eps_in=eps_in):
             d = poly.signed_distances(x)
-            i0 = int(np.argmin(np.abs(d)))
+            i0 = _scan_signed_distances(d=d, eps_in=eps_in, target_idx=0, eps_plane=eps_plane).argmin_abs
             return TrajectoryResult(float(boundary_f(x, i0)), steps=0, status="hit_face")
         raise ValueError("x0 must belong to the exterior domain.")
 
@@ -72,26 +130,26 @@ def trace_wop_trajectory(
         if not np.all(np.isfinite(x)):
             return TrajectoryResult(value=float(u_inf), steps=step - 1, status="escaped")
 
-        if r_max is not None and float(np.linalg.norm(x)) >= r_max:
+        if r_max_sq is not None and float(np.dot(x, x)) >= r_max_sq:
             return TrajectoryResult(value=float(u_inf), steps=step - 1, status="escaped")
 
-        nu_i = poly.nu[i]
-        b_i = float(poly.b[i])
+        nu_i = nu[i]
+        b_i = float(b[i])
         d_i = float(np.dot(nu_i, x) - b_i)
 
         if d_i <= eps_in:
             d_now = poly.signed_distances(x)
-            outside_mask_now = d_now > eps_in
-            if not np.any(outside_mask_now):
-                i_hit = int(np.argmin(np.abs(d_now)))
+            scan_now = _scan_signed_distances(d=d_now, eps_in=eps_in, target_idx=i, eps_plane=eps_plane)
+            if not scan_now.any_outside:
+                i_hit = scan_now.argmin_abs
                 return TrajectoryResult(
                     value=float(boundary_f(x, i_hit)),
                     steps=step - 1,
                     status="hit_face",
                 )
-            i = int(np.argmin(np.where(outside_mask_now, d_now, np.inf)))
-            nu_i = poly.nu[i]
-            b_i = float(poly.b[i])
+            i = int(scan_now.argmin_outside)  # scan_now.any_outside guarantees non-None.
+            nu_i = nu[i]
+            b_i = float(b[i])
             d_i = float(np.dot(nu_i, x) - b_i)
 
         try:
@@ -117,17 +175,15 @@ def trace_wop_trajectory(
             return TrajectoryResult(value=float(u_inf), steps=step, status="escaped")
 
         d = poly.signed_distances(y)
-        outside_mask = d > eps_in
-
-        hit = abs(float(d[i])) <= eps_plane and bool(np.all(d <= eps_in))
-        if hit:
+        scan = _scan_signed_distances(d=d, eps_in=eps_in, target_idx=i, eps_plane=eps_plane)
+        if scan.hit_target_face:
             return TrajectoryResult(value=float(boundary_f(y, i)), steps=step, status="hit_face")
 
-        if not np.any(outside_mask):
-            i_hit = int(np.argmin(np.abs(d)))
+        if not scan.any_outside:
+            i_hit = scan.argmin_abs
             return TrajectoryResult(value=float(boundary_f(y, i_hit)), steps=step, status="hit_face")
 
-        i = int(np.argmin(np.where(outside_mask, d, np.inf)))
+        i = int(scan.argmin_outside)  # scan.any_outside guarantees non-None.
         x = y
 
     return TrajectoryResult(value=float(u_inf), steps=max_steps, status="timeout")

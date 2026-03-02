@@ -25,8 +25,12 @@ estimation::TrajectoryResult trace_wos_box_trajectory(
     }
 
     math::Vec3 x = x0;
+    std::optional<double> r_max_sq = std::nullopt;
+    if (r_max.has_value()) {
+        r_max_sq = (*r_max) * (*r_max);
+    }
     for (int step = 1; step <= max_steps; ++step) {
-        if (r_max.has_value() && math::norm(x) >= *r_max) {
+        if (r_max_sq.has_value() && math::norm2(x) >= *r_max_sq) {
             return estimation::TrajectoryResult{u_inf, step - 1, "escaped"};
         }
 

@@ -19,7 +19,7 @@ def sample_unit_sphere(rng: np.random.Generator) -> FloatArray:
         w = rng.normal(size=3)
         n = float(np.linalg.norm(w))
         if n > 0.0:
-            return (w / n).astype(float)
+            return w / n
 
 
 def sample_tangent_direction(
@@ -41,10 +41,13 @@ def sample_tangent_direction(
         raise ValueError("max_resample must be positive.")
 
     nu_arr = _as_vec3("nu", nu)
-    nu_norm = float(np.linalg.norm(nu_arr))
-    if nu_norm == 0.0:
+    nu_norm_sq = float(np.dot(nu_arr, nu_arr))
+    if nu_norm_sq == 0.0:
         raise ValueError("nu must have non-zero norm.")
-    nu_unit = (nu_arr / nu_norm).astype(float)
+    if abs(nu_norm_sq - 1.0) <= 1e-12:
+        nu_unit = nu_arr
+    else:
+        nu_unit = nu_arr / float(np.sqrt(nu_norm_sq))
 
     for _ in range(max_resample):
         g = rng.normal(size=3)
@@ -52,7 +55,7 @@ def sample_tangent_direction(
         n = float(np.linalg.norm(w_raw))
         if not np.isfinite(n) or n <= min_norm:
             continue
-        return (w_raw / n).astype(float)
+        return w_raw / n
 
     raise RuntimeError("Failed to sample stable tangent direction.")
 
@@ -99,6 +102,6 @@ def sample_hit_on_plane_from_point(
         y = x_arr + t * omega
         if not np.all(np.isfinite(y)):
             continue
-        return y.astype(float), omega.astype(float), float(t)
+        return y, omega, float(t)
 
     raise RuntimeError("Failed to sample stable ray-plane intersection.")
