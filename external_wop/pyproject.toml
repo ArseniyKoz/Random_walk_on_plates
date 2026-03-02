@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wop"
+version = "0.1.0"
+description = "Walk on Planes Monte Carlo solver for exterior Dirichlet problem in R^3"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.23",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=7.0",
+]
+viz = [
+  "matplotlib>=3.7",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["wop*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
