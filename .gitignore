@@ -1,0 +1,26 @@
+# OS
+Thumbs.db
+.DS_Store
+
+# IDE/editor
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+*.egg-info/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Project-specific temp/cache
+external_wop/tmp/
+external_wop/.tmp_view_search.py
+
+# C++ build artifacts
+external_wop_cpp/build/
+build/
+cmake-build-*/
