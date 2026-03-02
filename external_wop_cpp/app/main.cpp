@@ -1,0 +1,176 @@
+#include <cmath>
+#include <cstdint>
+#include <cstdlib>
+#include <exception>
+#include <iomanip>
+#include <iostream>
+#include <optional>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
+#include "wop/geometry/box.hpp"
+#include "wop/solver/wop_solver.hpp"
+
+namespace {
+
+struct CliArgs {
+    std::string example = "box";
+    wop::math::Vec3 x0{3.0, 0.0, 0.0};
+    int n = 50000;
+    std::uint64_t seed = 12345;
+    int max_steps = 1'000'000;
+    std::optional<double> r_max = 1e6;
+    bool json = false;
+};
+
+[[noreturn]] void throw_usage_error(const std::string& msg) {
+    throw std::invalid_argument(msg);
+}
+
+wop::math::Vec3 parse_vec3_arg(const std::string& text) {
+    std::istringstream iss(text);
+    double x = 0.0;
+    double y = 0.0;
+    double z = 0.0;
+    std::string extra;
+    if (!(iss >> x >> y >> z) || (iss >> extra)) {
+        throw std::invalid_argument("Invalid --x0 format, expected: \"3 0 0\".");
+    }
+    return wop::math::Vec3{x, y, z};
+}
+
+CliArgs parse_args(int argc, char** argv) {
+    CliArgs args;
+
+    for (int i = 1; i < argc; ++i) {
+        const std::string key = argv[i];
+        auto require_value = [&](const std::string& opt) -> std::string {
+            if (i + 1 >= argc) {
+                throw_usage_error("Missing value for " + opt + ".");
+            }
+            return argv[++i];
+        };
+
+        if (key == "--example") {
+            args.example = require_value("--example");
+        } else if (key == "--x0") {
+            args.x0 = parse_vec3_arg(require_value("--x0"));
+        } else if (key == "--n") {
+            args.n = std::stoi(require_value("--n"));
+        } else if (key == "--seed") {
+            args.seed = static_cast<std::uint64_t>(std::stoull(require_value("--seed")));
+        } else if (key == "--max-steps") {
+            args.max_steps = std::stoi(require_value("--max-steps"));
+        } else if (key == "--r-max") {
+            const double value = std::stod(require_value("--r-max"));
+            args.r_max = (value > 0.0) ? std::optional<double>(value) : std::nullopt;
+        } else if (key == "--json") {
+            args.json = true;
+        } else if (key == "--help" || key == "-h") {
+            throw_usage_error("");
+        } else {
+            throw_usage_error("Unknown argument: " + key);
+        }
+    }
+
+    if (args.n <= 0) {
+        throw_usage_error("--n must be positive.");
+    }
+    if (args.max_steps <= 0) {
+        throw_usage_error("--max-steps must be positive.");
+    }
+    if (args.example != "box") {
+        throw_usage_error("Unsupported example: " + args.example);
+    }
+
+    return args;
+}
+
+void print_usage() {
+    std::cout << "Usage: wop_cli [--example box] [--x0 \"3 0 0\"] [--n 50000] [--seed 12345]\n"
+              << "               [--max-steps 1000000] [--r-max 1e6] [--json]\n";
+}
+
+int run_box_example(const CliArgs& args) {
+    const wop::math::Vec3 box_min{-1.0, -1.0, -1.0};
+    const wop::math::Vec3 box_max{1.0, 1.0, 1.0};
+    const wop::math::Vec3 interior{0.0, 0.0, 0.0};
+
+    auto poly = wop::geometry::make_axis_aligned_box(box_min, box_max);
+    poly = wop::geometry::orient_normals(poly, interior);
+
+    const wop::math::Vec3 a{0.2, -0.1, 0.3};
+    const auto exact_u = [&](const wop::math::Vec3& x) {
+        return 1.0 / wop::math::norm(x - a);
+    };
+    const auto boundary_f = [&](const wop::math::Vec3& y, std::optional<int>) {
+        return exact_u(y);
+    };
+
+    wop::rng::Rng rng(args.seed);
+    const auto result = wop::solver::estimate_wop(
+        poly,
+        args.x0,
+        boundary_f,
+        args.n,
+        rng,
+        std::nullopt,
+        std::nullopt,
+        1e-14,
+        args.max_steps,
+        0.0,
+        args.r_max);
+
+    const double exact = exact_u(args.x0);
+    const double abs_err = std::abs(result.J - exact);
+
+    if (args.json) {
+        std::cout << std::setprecision(17)
+                  << "{"
+                  << "\"x0\":[" << args.x0.x << "," << args.x0.y << "," << args.x0.z << "],"
+                  << "\"n_total\":" << result.n_total << ","
+                  << "\"n_truncated\":" << result.n_truncated << ","
+                  << "\"J\":" << result.J << ","
+                  << "\"exact\":" << exact << ","
+                  << "\"abs_error\":" << abs_err << ","
+                  << "\"S2\":" << result.S2 << ","
+                  << "\"eps\":" << result.eps << ","
+                  << "\"mean_steps\":" << result.mean_steps
+                  << "}\n";
+        return 0;
+    }
+
+    std::cout << "x0: [" << args.x0.x << ", " << args.x0.y << ", " << args.x0.z << "]\n";
+    std::cout << "n_total: " << result.n_total << "\n";
+    std::cout << "n_truncated: " << result.n_truncated << "\n";
+    std::cout << std::fixed << std::setprecision(10);
+    std::cout << "J: " << result.J << "\n";
+    std::cout << "exact: " << exact << "\n";
+    std::cout << "abs_error: " << abs_err << "\n";
+    std::cout << "S2: " << result.S2 << "\n";
+    std::cout << "eps: " << result.eps << "\n";
+    std::cout << std::setprecision(2) << "mean_steps: " << result.mean_steps << "\n";
+    return 0;
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+    try {
+        const CliArgs args = parse_args(argc, argv);
+        return run_box_example(args);
+    } catch (const std::invalid_argument& ex) {
+        if (std::string(ex.what()).empty()) {
+            print_usage();
+            return 0;
+        }
+        std::cerr << "Error: " << ex.what() << "\n";
+        print_usage();
+        return 2;
+    } catch (const std::exception& ex) {
+        std::cerr << "Fatal: " << ex.what() << "\n";
+        return 1;
+    }
+}
