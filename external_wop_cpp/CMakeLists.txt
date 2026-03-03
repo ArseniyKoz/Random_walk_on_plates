@@ -7,6 +7,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(WOP_BUILD_TESTS "Build C++ tests" ON)
+option(
+    WOP_ENABLE_RELEASE_IPO
+    "Enable IPO/LTO for Release builds when supported"
+    ON
+)
 
 add_library(wop_core STATIC
     src/math/vec3.cpp
@@ -28,13 +33,24 @@ target_compile_features(wop_core PUBLIC cxx_std_20)
 if(MSVC)
     target_compile_options(wop_core PRIVATE /W4 /permissive-)
 else()
-    target_compile_options(wop_core PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(wop_core PRIVATE -Wall -Wextra -Wpedantic -O3)
 endif()
 
 add_executable(wop_cli
     app/main.cpp
 )
 target_link_libraries(wop_cli PRIVATE wop_core)
+
+if(WOP_ENABLE_RELEASE_IPO)
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT WOP_IPO_SUPPORTED OUTPUT WOP_IPO_ERROR LANGUAGES CXX)
+    if(WOP_IPO_SUPPORTED)
+        set_property(TARGET wop_core PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+        set_property(TARGET wop_cli PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+    else()
+        message(STATUS "WOP: IPO/LTO requested but unavailable: ${WOP_IPO_ERROR}")
+    endif()
+endif()
 
 if(WOP_BUILD_TESTS)
     enable_testing()
