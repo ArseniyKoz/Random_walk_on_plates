@@ -72,6 +72,12 @@ WOP_CPP_CLI=../external_wop_cpp/build/wop_cli pytest -q tests/test_cpp_cli_parit
 python -m wop.cli --example box --x0 "3 0 0" --n 50000
 ```
 
+Projection mode with auto-`r_max` from polyhedron geometry:
+
+```bash
+python -m wop.cli --example box --x0 "3 0 0" --n 50000 --r-max 0 --r-max-mode project --r-max-factor 3.0
+```
+
 Expected output includes Monte Carlo `J`, `S2`, `eps = 3*sqrt(S2/N)`, exact value for built-in example, and trajectory diagnostics including total and truncated walks.
 
 ## Visual Check of Polyhedron

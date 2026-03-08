@@ -52,7 +52,11 @@ At current exterior point `x`:
 Optional practical stops:
 
 - `max_steps` timeout
-- `R_max` escape radius, returning `u_inf`
+- `R_max` handling mode:
+  - `escape` (legacy): if `||x|| >= R_max`, return `u_inf`
+  - `project`: if trajectory leaves a sphere centered at an auto geometry center,
+    project point to sphere and continue
+    (if `R_max` is disabled, radius is auto-computed from polyhedron and `r_max_factor`)
 
 ## 3. Why Face Membership Test Works
 

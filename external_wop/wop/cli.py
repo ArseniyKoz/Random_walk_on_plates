@@ -9,7 +9,15 @@ from .geometry import make_axis_aligned_box, orient_normals
 from .wop import estimate_wop
 
 
-def run_box_example(x0: np.ndarray, n_paths: int, seed: int, max_steps: int, r_max: float | None) -> None:
+def run_box_example(
+    x0: np.ndarray,
+    n_paths: int,
+    seed: int,
+    max_steps: int,
+    r_max: float | None,
+    r_max_mode: str,
+    r_max_factor: float,
+) -> None:
     box_min = np.array([-1.0, -1.0, -1.0], dtype=float)
     box_max = np.array([1.0, 1.0, 1.0], dtype=float)
     interior = np.array([0.0, 0.0, 0.0], dtype=float)
@@ -35,6 +43,8 @@ def run_box_example(x0: np.ndarray, n_paths: int, seed: int, max_steps: int, r_m
         max_steps=max_steps,
         u_inf=0.0,
         r_max=r_max,
+        r_max_mode=r_max_mode,
+        r_max_factor=r_max_factor,
     )
 
     exact = exact_u(x0)
@@ -69,6 +79,18 @@ def build_parser() -> argparse.ArgumentParser:
         default=1e6,
         help="Escape radius used to approximate infinity boundary (set to 0 or negative to disable).",
     )
+    parser.add_argument(
+        "--r-max-mode",
+        choices=["escape", "project"],
+        default="escape",
+        help="How trajectories behave at r_max: escape (legacy) or project to sphere and continue.",
+    )
+    parser.add_argument(
+        "--r-max-factor",
+        type=float,
+        default=3.0,
+        help="Auto-r_max multiplier for project mode when --r-max is disabled.",
+    )
     return parser
 
 
@@ -78,6 +100,8 @@ def main() -> None:
 
     if args.n <= 0:
         parser.error("--n must be positive")
+    if args.r_max_factor <= 1.0:
+        parser.error("--r-max-factor must be greater than 1.0")
 
     if args.example == "box":
         run_box_example(
@@ -86,6 +110,8 @@ def main() -> None:
             seed=args.seed,
             max_steps=args.max_steps,
             r_max=(args.r_max if args.r_max is not None and args.r_max > 0.0 else None),
+            r_max_mode=args.r_max_mode,
+            r_max_factor=float(args.r_max_factor),
         )
     else:
         parser.error(f"Unsupported example: {args.example}")
