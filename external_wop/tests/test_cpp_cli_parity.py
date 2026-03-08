@@ -10,6 +10,7 @@ import pytest
 
 from wop.geometry import make_axis_aligned_box, orient_normals
 from wop.wop import estimate_wop
+from wop.wos_box import estimate_wos_box
 
 
 def _find_cpp_cli() -> Path | None:
@@ -42,10 +43,24 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def _run_cpp_cli(x0: np.ndarray, seed: int, n_paths: int = 4000, max_steps: int = 200000, r_max: float = 1e6) -> dict[str, float]:
+def _run_cpp_cli(
+    x0: np.ndarray,
+    seed: int,
+    method: str,
+    n_paths: int = 4000,
+    max_steps: int = 200000,
+    r_max: float = 1e6,
+    r_max_mode: str = "escape",
+    r_max_factor: float = 3.0,
+    delta: float = 1e-3,
+    rho_scale: float = 1.0,
+    rho1_scale: float = 2.0,
+) -> dict[str, float]:
     assert CPP_CLI is not None
     cmd = [
         str(CPP_CLI),
+        "--method",
+        method,
         "--example",
         "box",
         "--x0",
@@ -56,18 +71,44 @@ def _run_cpp_cli(x0: np.ndarray, seed: int, n_paths: int = 4000, max_steps: int 
         str(int(seed)),
         "--max-steps",
         str(int(max_steps)),
-        "--r-max",
-        str(float(r_max)),
         "--json",
     ]
+    if method == "wop":
+        cmd.extend(
+            [
+                "--r-max",
+                str(float(r_max)),
+                "--r-max-mode",
+                str(r_max_mode),
+                "--r-max-factor",
+                str(float(r_max_factor)),
+            ]
+        )
+    elif method == "wos":
+        cmd.extend(
+            [
+                "--delta",
+                str(float(delta)),
+                "--rho-scale",
+                str(float(rho_scale)),
+                "--rho1-scale",
+                str(float(rho1_scale)),
+            ]
+        )
+    else:
+        raise ValueError(f"Unknown method: {method}")
+
     out = subprocess.check_output(cmd, text=True)
-    return json.loads(out)
+    payload = json.loads(out)
+    assert str(payload["method"]) == method
+    return payload
 
 
-def test_cpp_cli_reproducible_for_fixed_seed() -> None:
+@pytest.mark.parametrize("method", ["wop", "wos"])
+def test_cpp_cli_reproducible_for_fixed_seed(method: str) -> None:
     x0 = np.array([3.0, 0.0, 0.0], dtype=float)
-    run1 = _run_cpp_cli(x0=x0, seed=314159, n_paths=2000)
-    run2 = _run_cpp_cli(x0=x0, seed=314159, n_paths=2000)
+    run1 = _run_cpp_cli(x0=x0, seed=314159, method=method, n_paths=2000)
+    run2 = _run_cpp_cli(x0=x0, seed=314159, method=method, n_paths=2000)
     assert run1 == run2
 
 
@@ -103,7 +144,16 @@ def test_cpp_cli_matches_python_estimator_statistics() -> None:
             u_inf=0.0,
             r_max=1e6,
         )
-        cpp_res = _run_cpp_cli(x0=x0, seed=seed, n_paths=4000, max_steps=200000, r_max=1e6)
+        cpp_res = _run_cpp_cli(
+            x0=x0,
+            seed=seed,
+            method="wop",
+            n_paths=4000,
+            max_steps=200000,
+            r_max=1e6,
+            r_max_mode="escape",
+            r_max_factor=3.0,
+        )
 
         assert int(cpp_res["n_total"]) == 4000
         assert 0 <= int(cpp_res["n_truncated"]) <= int(cpp_res["n_total"])
@@ -124,3 +174,67 @@ def test_cpp_cli_matches_python_estimator_statistics() -> None:
 
         exact = exact_u(x0)
         assert abs(float(cpp_res["J"]) - exact) <= 1.5 * float(cpp_res["eps"]) + 3e-3
+
+
+def test_cpp_cli_wos_matches_python_estimator_statistics() -> None:
+    box_min = np.array([-1.0, -1.0, -1.0], dtype=float)
+    box_max = np.array([1.0, 1.0, 1.0], dtype=float)
+    a = np.array([0.2, -0.1, 0.3], dtype=float)
+
+    def exact_u(x: np.ndarray) -> float:
+        return float(1.0 / np.linalg.norm(x - a))
+
+    x0_list = [
+        np.array([3.0, 0.0, 0.0], dtype=float),
+        np.array([2.0, 2.0, 2.0], dtype=float),
+    ]
+
+    delta = 1e-3
+    for idx, x0 in enumerate(x0_list):
+        seed = 20_000 + idx
+        rng = np.random.default_rng(seed)
+        py_res = estimate_wos_box(
+            x0=x0,
+            box_min=box_min,
+            box_max=box_max,
+            boundary_f=lambda y, _face: exact_u(y),
+            n_paths=4000,
+            rng=rng,
+            delta=delta,
+            rho_scale=1.0,
+            rho1_scale=2.0,
+            max_steps=200000,
+            u_inf=0.0,
+        )
+        cpp_res = _run_cpp_cli(
+            x0=x0,
+            seed=seed,
+            method="wos",
+            n_paths=4000,
+            max_steps=200000,
+            delta=delta,
+            rho_scale=1.0,
+            rho1_scale=2.0,
+        )
+
+        assert int(cpp_res["n_total"]) == 4000
+        assert 0 <= int(cpp_res["n_truncated"]) <= int(cpp_res["n_total"])
+        assert float(cpp_res["S2"]) >= 0.0
+        assert np.isclose(
+            float(cpp_res["eps"]),
+            3.0 * np.sqrt(float(cpp_res["S2"]) / float(cpp_res["n_total"])),
+            rtol=0.0,
+            atol=1e-12,
+        )
+
+        diff = abs(float(cpp_res["J"]) - py_res.J)
+        se_cpp = np.sqrt(float(cpp_res["S2"]) / float(cpp_res["n_total"]))
+        se_py = np.sqrt(py_res.S2 / py_res.n_total)
+        combined = np.sqrt(se_cpp**2 + se_py**2)
+        assert diff <= 4.0 * combined + 4e-3
+
+        exact = exact_u(x0)
+        err_cpp = abs(float(cpp_res["J"]) - exact)
+        err_py = abs(py_res.J - exact)
+        assert err_cpp <= 2.5 * float(cpp_res["eps"]) + 1e-2
+        assert err_py <= 2.5 * py_res.eps + 1e-2

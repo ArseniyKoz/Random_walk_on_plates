@@ -71,7 +71,7 @@ cmake --build external_wop_cpp/build_compare_modes --config Release
 
 ```powershell
 external_wop_cpp/build_compare_modes/Release/wop_cli.exe `
-  --example box --x0 "3 0 0" --n 50000 --seed 12345 `
+  --method wop --example box --x0 "3 0 0" --n 50000 --seed 12345 `
   --r-max-mode escape --r-max 1000000 --json
 ```
 
@@ -79,7 +79,7 @@ external_wop_cpp/build_compare_modes/Release/wop_cli.exe `
 
 ```powershell
 external_wop_cpp/build_compare_modes/Release/wop_cli.exe `
-  --example box --x0 "3 0 0" --n 50000 --seed 12345 `
+  --method wop --example box --x0 "3 0 0" --n 50000 --seed 12345 `
   --r-max-mode project --r-max 2.5 --r-max-factor 2.0 --json
 ```
 
@@ -89,8 +89,16 @@ external_wop_cpp/build_compare_modes/Release/wop_cli.exe `
 
 ```powershell
 external_wop_cpp/build_compare_modes/Release/wop_cli.exe `
-  --example box --x0 "3 0 0" --n 50000 --seed 12345 `
+  --method wop --example box --x0 "3 0 0" --n 50000 --seed 12345 `
   --r-max-mode project --r-max 0 --r-max-factor 2.0 --json
+
+### 4) WoS режим для сопоставления с WOP
+
+```powershell
+external_wop_cpp/build_compare_modes/Release/wop_cli.exe `
+  --method wos --example box --x0 "3 0 0" --n 50000 --seed 12345 `
+  --delta 1e-3 --rho-scale 1.0 --rho1-scale 2.0 --json
+```
 ```
 
 Ключевой момент: `--r-max 0` => `nullopt` => `rho` вычисляется автоматически.
@@ -100,10 +108,10 @@ external_wop_cpp/build_compare_modes/Release/wop_cli.exe `
 ```powershell
 $cli = "external_wop_cpp/build_compare_modes/Release/wop_cli.exe"
 
-$escape = & $cli --example box --x0 "3 0 0" --n 100000 --seed 314159 `
+$escape = & $cli --method wop --example box --x0 "3 0 0" --n 100000 --seed 314159 `
   --r-max-mode escape --r-max 1000000 --json | ConvertFrom-Json
 
-$project = & $cli --example box --x0 "3 0 0" --n 100000 --seed 314159 `
+$project = & $cli --method wop --example box --x0 "3 0 0" --n 100000 --seed 314159 `
   --r-max-mode project --r-max 0 --r-max-factor 2.0 --json | ConvertFrom-Json
 
 [pscustomobject]@{
