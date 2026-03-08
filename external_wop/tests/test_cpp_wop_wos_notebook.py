@@ -17,7 +17,13 @@ def test_cpp_only_wop_wos_notebook_has_required_experiment_setup() -> None:
     code_text = "\n".join("".join(cell.get("source", [])) for cell in nb.get("cells", []) if cell.get("cell_type") == "code")
 
     assert "N_VALUES = [100, 1000, 10000, 100000, 1000000]" in code_text
-    assert 'METHODS = ["wop", "wos"]' in code_text
+    assert "CONFIGS = {" in code_text
+    assert '"wop_escape"' in code_text
+    assert '"wop_project"' in code_text
+    assert '"wos"' in code_text
+    assert "EPS_TARGETS" in code_text
 
     assert "from wop.wop import estimate_wop" not in code_text
     assert "from wop.wos_box import estimate_wos_box" not in code_text
+    assert 'runner_cpp.write_text(' not in code_text
+    assert 'TMP_ROOT / "main.cpp"' not in code_text
