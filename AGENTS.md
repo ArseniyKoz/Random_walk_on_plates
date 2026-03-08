@@ -75,6 +75,7 @@ Keep primary algorithmic logic in C++ modules (`external_wop_cpp/src`). Keep CLI
 Use C++ tests in `external_wop_cpp/tests` (via `ctest`) as the primary quality gate. Favor deterministic tests with fixed seeds.
 
 Python tests in `external_wop/tests/` remain useful for parity/regression checks.
+Do not run Python tests as part of agent execution by default; validate changes with C++ tests unless explicitly requested otherwise.
 
 ## Commit & Pull Request Guidelines
 Git history is not included in this workspace snapshot, so no project-specific commit pattern can be inferred here. Use Conventional Commit style by default (for example, `feat: add r_max guard in trajectory tracing`, `fix: tighten plane-hit tolerance check`).
