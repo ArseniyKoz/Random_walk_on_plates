@@ -22,6 +22,8 @@ struct CliArgs {
     std::uint64_t seed = 12345;
     int max_steps = 1'000'000;
     std::optional<double> r_max = 1e6;
+    wop::solver::RMaxMode r_max_mode = wop::solver::RMaxMode::Escape;
+    double r_max_factor = 3.0;
     bool json = false;
 };
 
@@ -39,6 +41,16 @@ wop::math::Vec3 parse_vec3_arg(const std::string& text) {
         throw std::invalid_argument("Invalid --x0 format, expected: \"3 0 0\".");
     }
     return wop::math::Vec3{x, y, z};
+}
+
+wop::solver::RMaxMode parse_r_max_mode(const std::string& text) {
+    if (text == "escape") {
+        return wop::solver::RMaxMode::Escape;
+    }
+    if (text == "project") {
+        return wop::solver::RMaxMode::Project;
+    }
+    throw std::invalid_argument("Invalid --r-max-mode, expected one of: escape, project.");
 }
 
 CliArgs parse_args(int argc, char** argv) {
@@ -66,6 +78,10 @@ CliArgs parse_args(int argc, char** argv) {
         } else if (key == "--r-max") {
             const double value = std::stod(require_value("--r-max"));
             args.r_max = (value > 0.0) ? std::optional<double>(value) : std::nullopt;
+        } else if (key == "--r-max-mode") {
+            args.r_max_mode = parse_r_max_mode(require_value("--r-max-mode"));
+        } else if (key == "--r-max-factor") {
+            args.r_max_factor = std::stod(require_value("--r-max-factor"));
         } else if (key == "--json") {
             args.json = true;
         } else if (key == "--help" || key == "-h") {
@@ -81,6 +97,9 @@ CliArgs parse_args(int argc, char** argv) {
     if (args.max_steps <= 0) {
         throw_usage_error("--max-steps must be positive.");
     }
+    if (args.r_max_factor <= 1.0) {
+        throw_usage_error("--r-max-factor must be greater than 1.0.");
+    }
     if (args.example != "box") {
         throw_usage_error("Unsupported example: " + args.example);
     }
@@ -90,7 +109,8 @@ CliArgs parse_args(int argc, char** argv) {
 
 void print_usage() {
     std::cout << "Usage: wop_cli [--example box] [--x0 \"3 0 0\"] [--n 50000] [--seed 12345]\n"
-              << "               [--max-steps 1000000] [--r-max 1e6] [--json]\n";
+              << "               [--max-steps 1000000] [--r-max 1e6]\n"
+              << "               [--r-max-mode escape|project] [--r-max-factor 3.0] [--json]\n";
 }
 
 int run_box_example(const CliArgs& args) {
@@ -121,7 +141,9 @@ int run_box_example(const CliArgs& args) {
         1e-14,
         args.max_steps,
         0.0,
-        args.r_max);
+        args.r_max,
+        args.r_max_mode,
+        args.r_max_factor);
 
     const double exact = exact_u(args.x0);
     const double abs_err = std::abs(result.J - exact);

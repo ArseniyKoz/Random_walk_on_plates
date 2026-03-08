@@ -12,6 +12,11 @@ namespace wop::solver {
 
 using BoundaryFunc = std::function<double(const math::Vec3&, std::optional<int>)>;
 
+enum class RMaxMode {
+    Escape,
+    Project,
+};
+
 estimation::TrajectoryResult trace_wop_trajectory(
     const geometry::Polyhedron& poly,
     const math::Vec3& x0,
@@ -22,7 +27,9 @@ estimation::TrajectoryResult trace_wop_trajectory(
     double min_abs_denom = 1e-14,
     int max_steps = 1'000'000,
     double u_inf = 0.0,
-    std::optional<double> r_max = std::nullopt);
+    std::optional<double> r_max = std::nullopt,
+    RMaxMode r_max_mode = RMaxMode::Escape,
+    double r_max_factor = 3.0);
 
 estimation::EstimateResult estimate_wop(
     const geometry::Polyhedron& poly,
@@ -35,6 +42,8 @@ estimation::EstimateResult estimate_wop(
     double min_abs_denom = 1e-14,
     int max_steps = 1'000'000,
     double u_inf = 0.0,
-    std::optional<double> r_max = std::nullopt);
+    std::optional<double> r_max = std::nullopt,
+    RMaxMode r_max_mode = RMaxMode::Escape,
+    double r_max_factor = 3.0);
 
 }  // namespace wop::solver

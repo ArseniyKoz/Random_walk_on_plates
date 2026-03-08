@@ -1,5 +1,6 @@
 #include "wop/solver/wop_solver.hpp"
 
+#include <cmath>
 #include <stdexcept>
 #include <vector>
 
@@ -18,7 +19,9 @@ estimation::TrajectoryResult trace_wop_trajectory(
     double min_abs_denom,
     int max_steps,
     double u_inf,
-    std::optional<double> r_max) {
+    std::optional<double> r_max,
+    RMaxMode r_max_mode,
+    double r_max_factor) {
     if (max_steps <= 0) {
         throw std::invalid_argument("max_steps must be positive.");
     }
@@ -34,10 +37,15 @@ estimation::TrajectoryResult trace_wop_trajectory(
     const auto& b = poly.b();
     std::size_t face_idx = 0;
     std::vector<double> d_buffer;
+    double eta = 1.0;
     std::optional<double> r_max_sq = std::nullopt;
-    if (r_max.has_value()) {
+    if (r_max_mode == RMaxMode::Escape && r_max.has_value()) {
         r_max_sq = (*r_max) * (*r_max);
     }
+    const auto r_max_proj = detail::resolve_r_max_projection(poly, x0, r_max, r_max_mode, r_max_factor);
+    const auto weighted_boundary_value = [&](double boundary_value) {
+        return u_inf + eta * (boundary_value - u_inf);
+    };
     try {
         face_idx = poly.closest_outside_face_index(x, eps_in);
     } catch (const std::invalid_argument&) {
@@ -45,16 +53,50 @@ estimation::TrajectoryResult trace_wop_trajectory(
             poly.signed_distances_inplace(x, d_buffer);
             const auto scan = detail::scan_distances(d_buffer, eps_in, 0, eps_plane);
             const std::size_t i0 = scan.argmin_abs;
-            return estimation::TrajectoryResult{boundary_f(x, static_cast<int>(i0)), 0, "hit_face"};
+            return estimation::TrajectoryResult{
+                weighted_boundary_value(boundary_f(x, static_cast<int>(i0))),
+                0,
+                "hit_face"};
         }
         throw std::invalid_argument("x0 must belong to the exterior domain.");
     }
 
     for (int step = 1; step <= max_steps; ++step) {
-        if (!math::is_finite(x)) {
+        if (!math::is_finite(x) || !std::isfinite(eta)) {
             return estimation::TrajectoryResult{u_inf, step - 1, "escaped"};
         }
-        if (r_max_sq.has_value() && math::norm2(x) >= *r_max_sq) {
+
+        if (r_max_proj.enabled) {
+            const double r = math::norm(x - r_max_proj.center);
+            if (!std::isfinite(r)) {
+                return estimation::TrajectoryResult{u_inf, step - 1, "escaped"};
+            }
+            if (r > r_max_proj.rho1) {
+                try {
+                    x = detail::sample_far_sphere_step(x, r_max_proj.center, r_max_proj.rho, rng);
+                } catch (const std::runtime_error&) {
+                    return estimation::TrajectoryResult{u_inf, step, "timeout"};
+                }
+                eta *= (r_max_proj.rho / r);
+                if (!math::is_finite(x) || !std::isfinite(eta)) {
+                    return estimation::TrajectoryResult{u_inf, step, "escaped"};
+                }
+                try {
+                    face_idx = poly.closest_outside_face_index(x, eps_in);
+                } catch (const std::invalid_argument&) {
+                    if (poly.is_inside_or_on(x, eps_in)) {
+                        poly.signed_distances_inplace(x, d_buffer);
+                        const auto scan = detail::scan_distances(d_buffer, eps_in, 0, eps_plane);
+                        return estimation::TrajectoryResult{
+                            weighted_boundary_value(boundary_f(x, static_cast<int>(scan.argmin_abs))),
+                            step,
+                            "hit_face"};
+                    }
+                    throw std::invalid_argument("Far-sphere sample must belong to the exterior domain.");
+                }
+                continue;
+            }
+        } else if (r_max_sq.has_value() && math::norm2(x) >= *r_max_sq) {
             return estimation::TrajectoryResult{u_inf, step - 1, "escaped"};
         }
 
@@ -67,7 +109,10 @@ estimation::TrajectoryResult trace_wop_trajectory(
             const auto scan_now = detail::scan_distances(d_buffer, eps_in, face_idx, eps_plane);
             if (!scan_now.any_outside) {
                 const std::size_t i_hit = scan_now.argmin_abs;
-                return estimation::TrajectoryResult{boundary_f(x, static_cast<int>(i_hit)), step - 1, "hit_face"};
+                return estimation::TrajectoryResult{
+                    weighted_boundary_value(boundary_f(x, static_cast<int>(i_hit))),
+                    step - 1,
+                    "hit_face"};
             }
             face_idx = scan_now.argmin_outside;
             nu_i = nu[face_idx];
@@ -93,12 +138,18 @@ estimation::TrajectoryResult trace_wop_trajectory(
         poly.signed_distances_inplace(y, d_buffer);
         const auto scan = detail::scan_distances(d_buffer, eps_in, face_idx, eps_plane);
         if (scan.hit_target_face) {
-            return estimation::TrajectoryResult{boundary_f(y, static_cast<int>(face_idx)), step, "hit_face"};
+            return estimation::TrajectoryResult{
+                weighted_boundary_value(boundary_f(y, static_cast<int>(face_idx))),
+                step,
+                "hit_face"};
         }
 
         if (!scan.any_outside) {
             const std::size_t i_hit = scan.argmin_abs;
-            return estimation::TrajectoryResult{boundary_f(y, static_cast<int>(i_hit)), step, "hit_face"};
+            return estimation::TrajectoryResult{
+                weighted_boundary_value(boundary_f(y, static_cast<int>(i_hit))),
+                step,
+                "hit_face"};
         }
 
         face_idx = scan.argmin_outside;
@@ -119,7 +170,9 @@ estimation::EstimateResult estimate_wop(
     double min_abs_denom,
     int max_steps,
     double u_inf,
-    std::optional<double> r_max) {
+    std::optional<double> r_max,
+    RMaxMode r_max_mode,
+    double r_max_factor) {
     const double L = poly.characteristic_length();
     const double eps_in_eff = eps_in.value_or(1e-12 * L);
     const double eps_plane_eff = eps_plane.value_or(1e-12 * L);
@@ -135,7 +188,9 @@ estimation::EstimateResult estimate_wop(
             min_abs_denom,
             max_steps,
             u_inf,
-            r_max);
+            r_max,
+            r_max_mode,
+            r_max_factor);
     });
 }
 

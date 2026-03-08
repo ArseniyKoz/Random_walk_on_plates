@@ -17,10 +17,11 @@ estimation::TrajectoryResult trace_wos_box_trajectory(
     const math::Vec3& box_max,
     const WosBoundaryFunc& boundary_f,
     rng::Rng& rng,
-    double eps,
+    double delta,
+    double rho_scale = 1.0,
+    double rho1_scale = 2.0,
     int max_steps = 1'000'000,
-    double u_inf = 0.0,
-    std::optional<double> r_max = std::nullopt);
+    double u_inf = 0.0);
 
 estimation::EstimateResult estimate_wos_box(
     const math::Vec3& x0,
@@ -29,9 +30,10 @@ estimation::EstimateResult estimate_wos_box(
     const WosBoundaryFunc& boundary_f,
     int n_paths,
     rng::Rng& rng,
-    double eps,
+    double delta,
+    double rho_scale = 1.0,
+    double rho1_scale = 2.0,
     int max_steps = 1'000'000,
-    double u_inf = 0.0,
-    std::optional<double> r_max = std::nullopt);
+    double u_inf = 0.0);
 
 }  // namespace wop::solver

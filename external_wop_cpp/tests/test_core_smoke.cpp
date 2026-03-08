@@ -118,7 +118,18 @@ void test_wos_smoke() {
     };
 
     wop::rng::Rng rng(12345);
-    const auto res = wop::solver::estimate_wos_box(x0, mn, mx, boundary_f, 512, rng, 1e-3, 200000, 0.0, 1e6);
+    const auto res = wop::solver::estimate_wos_box(
+        x0,
+        mn,
+        mx,
+        boundary_f,
+        512,
+        rng,
+        1e-3,
+        1.0,
+        2.0,
+        200000,
+        0.0);
 
     require(res.n_total == 512, "wos n_total mismatch");
     require(res.n_truncated >= 0 && res.n_truncated <= res.n_total, "wos n_truncated out of range");

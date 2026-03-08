@@ -72,4 +72,16 @@ if(WOP_BUILD_TESTS)
     )
     target_link_libraries(wop_pipeline_stages_tests PRIVATE wop_core)
     add_test(NAME wop_pipeline_stages_tests COMMAND wop_pipeline_stages_tests)
+
+    add_executable(wop_rmax_modes_tests
+        tests/test_wop_rmax_modes.cpp
+    )
+    target_link_libraries(wop_rmax_modes_tests PRIVATE wop_core)
+    add_test(NAME wop_rmax_modes_tests COMMAND wop_rmax_modes_tests)
+
+    add_executable(wos_lecture_external_tests
+        tests/test_wos_lecture_external.cpp
+    )
+    target_link_libraries(wos_lecture_external_tests PRIVATE wop_core)
+    add_test(NAME wos_lecture_external_tests COMMAND wos_lecture_external_tests)
 endif()
