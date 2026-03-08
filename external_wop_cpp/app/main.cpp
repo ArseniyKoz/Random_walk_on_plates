@@ -12,7 +12,7 @@
 
 #include "wop/geometry/box.hpp"
 #include "wop/solver/wop_solver.hpp"
-#include "wop/solver/wos_box_solver.hpp"
+#include "wop/solver/wos_solver.hpp"
 
 namespace {
 
@@ -173,10 +173,9 @@ int run_box_example(const CliArgs& args) {
             args.r_max_mode,
             args.r_max_factor);
     } else {
-        result = wop::solver::estimate_wos_box(
+        result = wop::solver::estimate_wos(
+            poly,
             args.x0,
-            box_min,
-            box_max,
             boundary_f,
             args.n,
             rng,

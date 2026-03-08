@@ -22,6 +22,7 @@ add_library(wop_core STATIC
     src/estimation/estimation.cpp
     src/solver/wop_solver_internal.cpp
     src/solver/wop_solver.cpp
+    src/solver/wos_solver.cpp
     src/solver/wos_box_solver.cpp
 )
 

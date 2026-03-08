@@ -1,14 +1,20 @@
 #pragma once
 
+#include <functional>
+#include <optional>
+
+#include "wop/estimation/estimation.hpp"
+#include "wop/geometry/polyhedron.hpp"
 #include "wop/math/vec3.hpp"
-#include "wop/solver/wos_solver.hpp"
+#include "wop/rng/rng.hpp"
 
 namespace wop::solver {
 
-estimation::TrajectoryResult trace_wos_box_trajectory(
+using WosBoundaryFunc = std::function<double(const math::Vec3&, std::optional<int>)>;
+
+estimation::TrajectoryResult trace_wos_trajectory(
+    const geometry::Polyhedron& poly,
     const math::Vec3& x0,
-    const math::Vec3& box_min,
-    const math::Vec3& box_max,
     const WosBoundaryFunc& boundary_f,
     rng::Rng& rng,
     double delta,
@@ -17,10 +23,9 @@ estimation::TrajectoryResult trace_wos_box_trajectory(
     int max_steps = 1'000'000,
     double u_inf = 0.0);
 
-estimation::EstimateResult estimate_wos_box(
+estimation::EstimateResult estimate_wos(
+    const geometry::Polyhedron& poly,
     const math::Vec3& x0,
-    const math::Vec3& box_min,
-    const math::Vec3& box_max,
     const WosBoundaryFunc& boundary_f,
     int n_paths,
     rng::Rng& rng,
@@ -31,3 +36,4 @@ estimation::EstimateResult estimate_wos_box(
     double u_inf = 0.0);
 
 }  // namespace wop::solver
+
