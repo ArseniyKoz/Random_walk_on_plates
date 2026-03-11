@@ -38,7 +38,6 @@ else()
 endif()
 
 add_library(wop_cli_support STATIC
-    src/config/expression.cpp
     src/config/config.cpp
     src/config/run_config.cpp
 )

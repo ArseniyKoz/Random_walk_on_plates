@@ -5,7 +5,6 @@
 #include <optional>
 #include <vector>
 
-#include "wop/config/expression.hpp"
 #include "wop/math/vec3.hpp"
 #include "wop/solver/wop_solver.hpp"
 
@@ -38,6 +37,20 @@ struct WosConfig {
     double rho1_scale = 2.0;
 };
 
+enum class FunctionKind {
+    Constant,
+    X,
+    Y,
+    Z,
+    Coulomb,
+};
+
+struct FunctionConfig {
+    FunctionKind kind = FunctionKind::Constant;
+    double value = 0.0;
+    math::Vec3 source{};
+};
+
 struct RuntimeConfig {
     Method method = Method::Wop;
     math::Vec3 x0{};
@@ -46,8 +59,8 @@ struct RuntimeConfig {
     int max_steps = 0;
     double u_inf = 0.0;
     GeometryConfig geometry;
-    CompiledExpression boundary_expression;
-    std::optional<CompiledExpression> reference_expression = std::nullopt;
+    FunctionConfig boundary;
+    std::optional<FunctionConfig> reference = std::nullopt;
     std::optional<WopConfig> wop = std::nullopt;
     std::optional<WosConfig> wos = std::nullopt;
 };

@@ -15,6 +15,22 @@ namespace wop::config {
 
 namespace {
 
+double evaluate_function(const FunctionConfig& fn, const math::Vec3& point) {
+    switch (fn.kind) {
+        case FunctionKind::Constant:
+            return fn.value;
+        case FunctionKind::X:
+            return point.x;
+        case FunctionKind::Y:
+            return point.y;
+        case FunctionKind::Z:
+            return point.z;
+        case FunctionKind::Coulomb:
+            return 1.0 / math::norm(point - fn.source);
+    }
+    throw std::invalid_argument("Unsupported builtin function kind.");
+}
+
 geometry::Polyhedron build_polyhedron(const RuntimeConfig& config) {
     std::vector<geometry::Plane> planes;
     planes.reserve(config.geometry.planes.size());
@@ -38,7 +54,7 @@ ConfigRunResult run_config(const RuntimeConfig& config) {
 
     const geometry::Polyhedron poly = build_polyhedron(config);
     const auto boundary_f = [&](const math::Vec3& y, std::optional<int>) {
-        return config.boundary_expression.evaluate(y);
+        return evaluate_function(config.boundary, y);
     };
 
     rng::Rng rng(config.seed);
@@ -71,8 +87,8 @@ ConfigRunResult run_config(const RuntimeConfig& config) {
             config.u_inf);
     }
 
-    if (config.reference_expression.has_value()) {
-        const double exact = config.reference_expression->evaluate(config.x0);
+    if (config.reference.has_value()) {
+        const double exact = evaluate_function(*config.reference, config.x0);
         result.exact = exact;
         result.abs_error = std::abs(result.estimate.J - exact);
     }

@@ -10,7 +10,6 @@
 #include <string>
 
 #include "wop/config/config.hpp"
-#include "wop/config/expression.hpp"
 #include "wop/config/run_config.hpp"
 #include "wop/geometry/polyhedron.hpp"
 #include "wop/math/vec3.hpp"
@@ -81,6 +80,16 @@ std::filesystem::path find_cli_binary(const char* argv0) {
     return candidate;
 }
 
+std::filesystem::path find_examples_dir(const char* argv0) {
+    const auto self = std::filesystem::absolute(argv0);
+    const auto root = self.parent_path().parent_path();
+    const auto examples = root / "examples";
+    if (!std::filesystem::exists(examples)) {
+        throw std::runtime_error("Could not locate examples directory.");
+    }
+    return examples;
+}
+
 std::string cube_config_yaml(const std::string& method, bool with_reference) {
     std::string yaml =
         "command: wop_cli --config examples/" + method + "_cube.yaml --json\n"
@@ -106,11 +115,13 @@ std::string cube_config_yaml(const std::string& method, bool with_reference) {
         "    - p: [0.0, 0.0, -1.0]\n"
         "      nu: [0.0, 0.0, -1.0]\n"
         "boundary:\n"
-        "  expression: \"1 / sqrt((x - 0.2)^2 + (y + 0.1)^2 + (z - 0.3)^2)\"\n";
+        "  kind: coulomb\n"
+        "  source: [0.2, -0.1, 0.3]\n";
     if (with_reference) {
         yaml +=
             "reference:\n"
-            "  expression: \"1 / sqrt((x - 0.2)^2 + (y + 0.1)^2 + (z - 0.3)^2)\"\n";
+            "  kind: coulomb\n"
+            "  source: [0.2, -0.1, 0.3]\n";
     }
     if (method == "wop") {
         yaml +=
@@ -128,21 +139,44 @@ std::string cube_config_yaml(const std::string& method, bool with_reference) {
     return yaml;
 }
 
-void test_expression_parser_handles_basic_operators_and_functions() {
-    const auto expr = wop::config::compile_expression("sqrt((x - 1)^2) + abs(y) + cos(z) + pi - e");
-    const double value = expr.evaluate(wop::math::Vec3{4.0, -2.0, 0.0});
-    const double expected = 3.0 + 2.0 + 1.0 + std::acos(-1.0) - std::exp(1.0);
-    require(close(value, expected, 1e-12), "expression evaluation mismatch");
+void test_builtin_function_loader_reads_coulomb_function() {
+    const auto path = write_temp_config("loader_builtin_coulomb", cube_config_yaml("wop", true));
+    const auto cfg = wop::config::load_config_file(path);
+
+    require(cfg.boundary.kind == wop::config::FunctionKind::Coulomb, "boundary kind mismatch");
+    require(close(cfg.boundary.source.x, 0.2), "boundary source.x mismatch");
+    require(close(cfg.boundary.source.y, -0.1), "boundary source.y mismatch");
+    require(close(cfg.boundary.source.z, 0.3), "boundary source.z mismatch");
+    require(cfg.reference.has_value(), "reference builtin should be present");
 }
 
-void test_expression_parser_rejects_unknown_identifier() {
+void test_builtin_function_loader_rejects_unknown_kind() {
+    const auto path = write_temp_config(
+        "loader_builtin_unknown",
+        "method: wop\n"
+        "x0: [3.0, 0.0, 0.0]\n"
+        "n: 10\n"
+        "seed: 1\n"
+        "max_steps: 1000\n"
+        "geometry:\n"
+        "  interior_point: [0.0, 0.0, 0.0]\n"
+        "  planes:\n"
+        "    - p: [1.0, 0.0, 0.0]\n"
+        "      nu: [1.0, 0.0, 0.0]\n"
+        "boundary:\n"
+        "  kind: unknown\n"
+        "wop:\n"
+        "  r_max: 10.0\n"
+        "  r_max_mode: escape\n"
+        "  r_max_factor: 3.0\n");
+
     bool caught = false;
     try {
-        static_cast<void>(wop::config::compile_expression("x + face"));
+        static_cast<void>(wop::config::load_config_file(path));
     } catch (const std::invalid_argument&) {
         caught = true;
     }
-    require(caught, "expression parser should reject unknown identifiers");
+    require(caught, "loader should reject unknown builtin function kind");
 }
 
 void test_yaml_config_loader_reads_general_plane_geometry() {
@@ -152,7 +186,7 @@ void test_yaml_config_loader_reads_general_plane_geometry() {
     require(cfg.method == wop::config::Method::Wop, "method mismatch");
     require(cfg.geometry.planes.size() == 6, "plane count mismatch");
     require(close(cfg.x0.x, 3.0) && close(cfg.x0.y, 0.0) && close(cfg.x0.z, 0.0), "x0 mismatch");
-    require(cfg.reference_expression.has_value(), "reference expression should be present");
+    require(cfg.reference.has_value(), "reference function should be present");
     require(cfg.wop.has_value(), "wop section should be present");
     require(!cfg.wos.has_value(), "wos section should not be present");
 }
@@ -163,6 +197,17 @@ void test_yaml_config_loader_allows_optional_command_metadata() {
 
     require(cfg.method == wop::config::Method::Wop, "method mismatch for config with command metadata");
     require(cfg.wop.has_value(), "wop section should be present for config with command metadata");
+}
+
+void test_example_configs_are_tuned_for_fast_runs(const char* argv0) {
+    const auto examples = find_examples_dir(argv0);
+    const auto wop_cfg = wop::config::load_config_file(examples / "box_wop.yaml");
+    const auto wos_cfg = wop::config::load_config_file(examples / "box_wos.yaml");
+
+    require(wop_cfg.method == wop::config::Method::Wop, "box_wop example must use WOP");
+    require(wos_cfg.method == wop::config::Method::Wos, "box_wos example must use WoS");
+    require(wop_cfg.n <= 1000, "box_wop example must keep n small for interactive runs");
+    require(wos_cfg.n <= 50000, "box_wos example should stay interactive");
 }
 
 void test_yaml_config_loader_rejects_missing_interior_point() {
@@ -178,7 +223,7 @@ void test_yaml_config_loader_rejects_missing_interior_point() {
         "    - p: [1.0, 0.0, 0.0]\n"
         "      nu: [1.0, 0.0, 0.0]\n"
         "boundary:\n"
-        "  expression: \"x\"\n"
+        "  kind: x\n"
         "wop:\n"
         "  r_max: 10.0\n"
         "  r_max_mode: escape\n"
@@ -284,11 +329,12 @@ void test_cli_accepts_config_and_emits_json(const char* argv0) {
 
 int main(int argc, char** argv) {
     try {
-        test_expression_parser_handles_basic_operators_and_functions();
-        test_expression_parser_rejects_unknown_identifier();
+        test_builtin_function_loader_reads_coulomb_function();
+        test_builtin_function_loader_rejects_unknown_kind();
         test_yaml_config_loader_reads_general_plane_geometry();
         test_yaml_config_loader_allows_optional_command_metadata();
         test_yaml_config_loader_rejects_missing_interior_point();
+        test_example_configs_are_tuned_for_fast_runs(argc > 0 ? argv[0] : "");
         test_run_config_wop_matches_direct_solver_statistics();
         test_run_config_wos_matches_direct_solver_statistics_without_reference();
         test_cli_accepts_config_and_emits_json(argc > 0 ? argv[0] : "");

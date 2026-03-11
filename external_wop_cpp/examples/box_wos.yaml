@@ -1,4 +1,4 @@
-command: wop_cli --config examples/box_wos.yaml --json
+command: .\build\Release\wop_cli.exe --config examples/box_wos.yaml --json
 method: wos
 x0: [3.0, 0.0, 0.0]
 n: 50000
@@ -23,10 +23,12 @@ geometry:
       nu: [0.0, 0.0, -1.0]
 
 boundary:
-  expression: "1 / sqrt((x - 0.2)^2 + (y + 0.1)^2 + (z - 0.3)^2)"
+  kind: coulomb
+  source: [0.2, -0.1, 0.3]
 
 reference:
-  expression: "1 / sqrt((x - 0.2)^2 + (y + 0.1)^2 + (z - 0.3)^2)"
+  kind: coulomb
+  source: [0.2, -0.1, 0.3]
 
 wos:
   delta: 1e-3

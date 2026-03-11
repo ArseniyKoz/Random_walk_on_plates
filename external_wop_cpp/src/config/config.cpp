@@ -329,6 +329,26 @@ Method parse_method(const Node& root) {
     throw std::invalid_argument("method must be one of: wop, wos.");
 }
 
+FunctionKind parse_function_kind(const std::string& text) {
+    const std::string clean = unquote(text);
+    if (clean == "constant") {
+        return FunctionKind::Constant;
+    }
+    if (clean == "x") {
+        return FunctionKind::X;
+    }
+    if (clean == "y") {
+        return FunctionKind::Y;
+    }
+    if (clean == "z") {
+        return FunctionKind::Z;
+    }
+    if (clean == "coulomb") {
+        return FunctionKind::Coulomb;
+    }
+    throw std::invalid_argument("function kind must be one of: constant, x, y, z, coulomb.");
+}
+
 solver::RMaxMode parse_r_max_mode(const std::string& text) {
     const std::string clean = unquote(text);
     if (clean == "escape") {
@@ -363,6 +383,24 @@ GeometryConfig parse_geometry(const Node& root) {
     }
 
     return geometry;
+}
+
+FunctionConfig parse_function_section(const Node& root, const std::string& section_name) {
+    const Node& fn_node = require_map(require_key(root, section_name, "root"), section_name);
+    FunctionConfig fn;
+    fn.kind = parse_function_kind(require_scalar(require_key(fn_node, "kind", section_name), section_name + ".kind"));
+
+    if (fn.kind == FunctionKind::Constant) {
+        fn.value = parse_double_scalar(
+            require_scalar(require_key(fn_node, "value", section_name), section_name + ".value"),
+            section_name + ".value");
+    } else if (fn.kind == FunctionKind::Coulomb) {
+        fn.source = parse_vec3_scalar(
+            require_scalar(require_key(fn_node, "source", section_name), section_name + ".source"),
+            section_name + ".source");
+    }
+
+    return fn;
 }
 
 std::optional<double> parse_optional_radius(const std::string& text) {
@@ -439,14 +477,11 @@ RuntimeConfig load_config_file(const std::filesystem::path& path) {
 
     cfg.geometry = parse_geometry(root);
 
-    const Node& boundary_node = require_map(require_key(root, "boundary", "root"), "boundary");
-    cfg.boundary_expression = compile_expression(
-        unquote(require_scalar(require_key(boundary_node, "expression", "boundary"), "boundary.expression")));
+    cfg.boundary = parse_function_section(root, "boundary");
 
     if (const Node* reference_node = find_key(root, "reference"); reference_node != nullptr) {
-        const Node& reference_map = require_map(*reference_node, "reference");
-        cfg.reference_expression = compile_expression(
-            unquote(require_scalar(require_key(reference_map, "expression", "reference"), "reference.expression")));
+        require_map(*reference_node, "reference");
+        cfg.reference = parse_function_section(root, "reference");
     }
 
     if (cfg.method == Method::Wop) {

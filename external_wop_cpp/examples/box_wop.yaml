@@ -1,7 +1,7 @@
-command: wop_cli --config examples/box_wop.yaml --json
+command: .\build\Release\wop_cli.exe --config examples/box_wop.yaml --json
 method: wop
 x0: [3.0, 0.0, 0.0]
-n: 50000
+n: 300
 seed: 12345
 max_steps: 200000
 u_inf: 0.0
@@ -23,12 +23,14 @@ geometry:
       nu: [0.0, 0.0, -1.0]
 
 boundary:
-  expression: "1 / sqrt((x - 0.2)^2 + (y + 0.1)^2 + (z - 0.3)^2)"
+  kind: constant
+  value: 1.0
 
 reference:
-  expression: "1 / sqrt((x - 0.2)^2 + (y + 0.1)^2 + (z - 0.3)^2)"
+  kind: constant
+  value: 1.0
 
 wop:
   r_max: 1000000.0
-  r_max_mode: escape
+  r_max_mode: project
   r_max_factor: 3.0
