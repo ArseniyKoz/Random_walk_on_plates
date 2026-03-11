@@ -51,12 +51,15 @@ Run the C++ CLI:
 Run the C++ CLI from YAML config:
 
 ```bash
-./build/wop_cli --config examples/box_wop.yaml --json
-./build/wop_cli --config examples/box_wos.yaml --json
+./build/Release/wop_cli.exe --config examples/box_wop.yaml --json
+./build/Release/wop_cli.exe --config examples/box_wos.yaml --json
 ```
 
 Ready-to-run YAML examples live in `../external_wop_cpp/examples/`.
 Each config includes a top-level `command:` field with the intended launch command.
+Config files now select built-in boundary functions from C++ code instead of
+parsing free-form formulas. The specialized `--example box` path is still
+faster than the general config path.
 
 Machine-readable output for regression checks:
 
