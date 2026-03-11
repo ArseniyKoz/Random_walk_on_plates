@@ -1,0 +1,34 @@
+command: wop_cli --config examples/box_wos.yaml --json
+method: wos
+x0: [3.0, 0.0, 0.0]
+n: 50000
+seed: 12345
+max_steps: 200000
+u_inf: 0.0
+
+geometry:
+  interior_point: [0.0, 0.0, 0.0]
+  planes:
+    - p: [1.0, 0.0, 0.0]
+      nu: [1.0, 0.0, 0.0]
+    - p: [-1.0, 0.0, 0.0]
+      nu: [-1.0, 0.0, 0.0]
+    - p: [0.0, 1.0, 0.0]
+      nu: [0.0, 1.0, 0.0]
+    - p: [0.0, -1.0, 0.0]
+      nu: [0.0, -1.0, 0.0]
+    - p: [0.0, 0.0, 1.0]
+      nu: [0.0, 0.0, 1.0]
+    - p: [0.0, 0.0, -1.0]
+      nu: [0.0, 0.0, -1.0]
+
+boundary:
+  expression: "1 / sqrt((x - 0.2)^2 + (y + 0.1)^2 + (z - 0.3)^2)"
+
+reference:
+  expression: "1 / sqrt((x - 0.2)^2 + (y + 0.1)^2 + (z - 0.3)^2)"
+
+wos:
+  delta: 1e-3
+  rho_scale: 1.0
+  rho1_scale: 2.0

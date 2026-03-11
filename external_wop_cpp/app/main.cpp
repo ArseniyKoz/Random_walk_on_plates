@@ -10,6 +10,8 @@
 #include <string>
 #include <vector>
 
+#include "wop/config/config.hpp"
+#include "wop/config/run_config.hpp"
 #include "wop/geometry/box.hpp"
 #include "wop/solver/wop_solver.hpp"
 #include "wop/solver/wos_solver.hpp"
@@ -17,6 +19,7 @@
 namespace {
 
 struct CliArgs {
+    std::optional<std::string> config_path = std::nullopt;
     std::string example = "box";
     std::string method = "wop";
     wop::math::Vec3 x0{3.0, 0.0, 0.0};
@@ -30,6 +33,7 @@ struct CliArgs {
     wop::solver::RMaxMode r_max_mode = wop::solver::RMaxMode::Escape;
     double r_max_factor = 3.0;
     bool json = false;
+    bool legacy_mode_args_used = false;
 };
 
 [[noreturn]] void throw_usage_error(const std::string& msg) {
@@ -71,30 +75,44 @@ CliArgs parse_args(int argc, char** argv) {
         };
 
         if (key == "--example") {
+            args.legacy_mode_args_used = true;
             args.example = require_value("--example");
         } else if (key == "--method") {
+            args.legacy_mode_args_used = true;
             args.method = require_value("--method");
         } else if (key == "--x0") {
+            args.legacy_mode_args_used = true;
             args.x0 = parse_vec3_arg(require_value("--x0"));
         } else if (key == "--n") {
+            args.legacy_mode_args_used = true;
             args.n = std::stoi(require_value("--n"));
         } else if (key == "--seed") {
+            args.legacy_mode_args_used = true;
             args.seed = static_cast<std::uint64_t>(std::stoull(require_value("--seed")));
         } else if (key == "--max-steps") {
+            args.legacy_mode_args_used = true;
             args.max_steps = std::stoi(require_value("--max-steps"));
         } else if (key == "--delta") {
+            args.legacy_mode_args_used = true;
             args.delta = std::stod(require_value("--delta"));
         } else if (key == "--rho-scale") {
+            args.legacy_mode_args_used = true;
             args.rho_scale = std::stod(require_value("--rho-scale"));
         } else if (key == "--rho1-scale") {
+            args.legacy_mode_args_used = true;
             args.rho1_scale = std::stod(require_value("--rho1-scale"));
         } else if (key == "--r-max") {
+            args.legacy_mode_args_used = true;
             const double value = std::stod(require_value("--r-max"));
             args.r_max = (value > 0.0) ? std::optional<double>(value) : std::nullopt;
         } else if (key == "--r-max-mode") {
+            args.legacy_mode_args_used = true;
             args.r_max_mode = parse_r_max_mode(require_value("--r-max-mode"));
         } else if (key == "--r-max-factor") {
+            args.legacy_mode_args_used = true;
             args.r_max_factor = std::stod(require_value("--r-max-factor"));
+        } else if (key == "--config") {
+            args.config_path = require_value("--config");
         } else if (key == "--json") {
             args.json = true;
         } else if (key == "--help" || key == "-h") {
@@ -102,6 +120,13 @@ CliArgs parse_args(int argc, char** argv) {
         } else {
             throw_usage_error("Unknown argument: " + key);
         }
+    }
+
+    if (args.config_path.has_value()) {
+        if (args.legacy_mode_args_used) {
+            throw_usage_error("--config cannot be combined with legacy example arguments.");
+        }
+        return args;
     }
 
     if (args.n <= 0) {
@@ -133,10 +158,22 @@ CliArgs parse_args(int argc, char** argv) {
 }
 
 void print_usage() {
-    std::cout << "Usage: wop_cli [--method wop|wos] [--example box] [--x0 \"3 0 0\"] [--n 50000] [--seed 12345]\n"
+    std::cout << "Usage: wop_cli --config config.yaml [--json]\n"
+              << "       wop_cli [--method wop|wos] [--example box] [--x0 \"3 0 0\"] [--n 50000] [--seed 12345]\n"
               << "               [--max-steps 1000000] [--json]\n"
               << "               WOP args: [--r-max 1e6] [--r-max-mode escape|project] [--r-max-factor 3.0]\n"
               << "               WoS args: [--delta 1e-3] [--rho-scale 1.0] [--rho1-scale 2.0]\n";
+}
+
+int run_config_mode(const CliArgs& args) {
+    const wop::config::RuntimeConfig config = wop::config::load_config_file(*args.config_path);
+    const wop::config::ConfigRunResult result = wop::config::run_config(config);
+    if (args.json) {
+        std::cout << wop::config::format_json_result(result);
+    } else {
+        std::cout << wop::config::format_text_result(result);
+    }
+    return 0;
 }
 
 int run_box_example(const CliArgs& args) {
@@ -225,6 +262,9 @@ int run_box_example(const CliArgs& args) {
 int main(int argc, char** argv) {
     try {
         const CliArgs args = parse_args(argc, argv);
+        if (args.config_path.has_value()) {
+            return run_config_mode(args);
+        }
         return run_box_example(args);
     } catch (const std::invalid_argument& ex) {
         if (std::string(ex.what()).empty()) {

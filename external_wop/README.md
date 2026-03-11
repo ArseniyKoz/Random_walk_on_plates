@@ -48,6 +48,16 @@ Run the C++ CLI:
 ./build/wop_cli --example box --x0 "3 0 0" --n 50000
 ```
 
+Run the C++ CLI from YAML config:
+
+```bash
+./build/wop_cli --config examples/box_wop.yaml --json
+./build/wop_cli --config examples/box_wos.yaml --json
+```
+
+Ready-to-run YAML examples live in `../external_wop_cpp/examples/`.
+Each config includes a top-level `command:` field with the intended launch command.
+
 Machine-readable output for regression checks:
 
 ```bash

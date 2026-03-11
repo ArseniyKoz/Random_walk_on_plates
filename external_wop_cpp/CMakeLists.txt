@@ -37,10 +37,26 @@ else()
     target_compile_options(wop_core PRIVATE -Wall -Wextra -Wpedantic -O3)
 endif()
 
+add_library(wop_cli_support STATIC
+    src/config/expression.cpp
+    src/config/config.cpp
+    src/config/run_config.cpp
+)
+target_include_directories(wop_cli_support PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+target_compile_features(wop_cli_support PUBLIC cxx_std_20)
+target_link_libraries(wop_cli_support PUBLIC wop_core)
+if(MSVC)
+    target_compile_options(wop_cli_support PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(wop_cli_support PRIVATE -Wall -Wextra -Wpedantic -O3)
+endif()
+
 add_executable(wop_cli
     app/main.cpp
 )
-target_link_libraries(wop_cli PRIVATE wop_core)
+target_link_libraries(wop_cli PRIVATE wop_cli_support)
 
 if(WOP_ENABLE_RELEASE_IPO)
     include(CheckIPOSupported)
@@ -85,4 +101,11 @@ if(WOP_BUILD_TESTS)
     )
     target_link_libraries(wos_lecture_external_tests PRIVATE wop_core)
     add_test(NAME wos_lecture_external_tests COMMAND wos_lecture_external_tests)
+
+    add_executable(wop_config_runtime_tests
+        tests/test_config_runtime.cpp
+    )
+    target_link_libraries(wop_config_runtime_tests PRIVATE wop_cli_support)
+    add_dependencies(wop_config_runtime_tests wop_cli)
+    add_test(NAME wop_config_runtime_tests COMMAND wop_config_runtime_tests)
 endif()
