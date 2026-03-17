@@ -1,7 +1,7 @@
 command: .\build\Release\wop_cli.exe --config examples/box_wop.yaml --json
 method: wop
 x0: [3.0, 0.0, 0.0]
-n: 300
+n: 50000
 seed: 12345
 max_steps: 200000
 u_inf: 0.0
@@ -21,14 +21,6 @@ geometry:
       nu: [0.0, 0.0, 1.0]
     - p: [0.0, 0.0, -1.0]
       nu: [0.0, 0.0, -1.0]
-
-boundary:
-  kind: constant
-  value: 1.0
-
-reference:
-  kind: constant
-  value: 1.0
 
 wop:
   r_max: 1000000.0

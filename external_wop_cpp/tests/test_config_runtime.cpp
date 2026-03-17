@@ -10,7 +10,9 @@
 #include <string>
 
 #include "wop/config/config.hpp"
+#include "wop/config/problem_functions.hpp"
 #include "wop/config/run_config.hpp"
+#include "wop/geometry/box.hpp"
 #include "wop/geometry/polyhedron.hpp"
 #include "wop/math/vec3.hpp"
 #include "wop/rng/rng.hpp"
@@ -90,9 +92,9 @@ std::filesystem::path find_examples_dir(const char* argv0) {
     return examples;
 }
 
-std::string cube_config_yaml(const std::string& method, bool with_reference) {
+std::string cube_config_yaml(const std::string& method) {
     std::string yaml =
-        "command: wop_cli --config examples/" + method + "_cube.yaml --json\n"
+        "command: .\\build\\Release\\wop_cli.exe --config examples/" + method + "_cube.yaml --json\n"
         "method: " + method + "\n"
         "x0: [3.0, 0.0, 0.0]\n"
         "n: 300\n"
@@ -113,16 +115,7 @@ std::string cube_config_yaml(const std::string& method, bool with_reference) {
         "    - p: [0.0, 0.0, 1.0]\n"
         "      nu: [0.0, 0.0, 1.0]\n"
         "    - p: [0.0, 0.0, -1.0]\n"
-        "      nu: [0.0, 0.0, -1.0]\n"
-        "boundary:\n"
-        "  kind: coulomb\n"
-        "  source: [0.2, -0.1, 0.3]\n";
-    if (with_reference) {
-        yaml +=
-            "reference:\n"
-            "  kind: coulomb\n"
-            "  source: [0.2, -0.1, 0.3]\n";
-    }
+        "      nu: [0.0, 0.0, -1.0]\n";
     if (method == "wop") {
         yaml +=
             "wop:\n"
@@ -139,20 +132,51 @@ std::string cube_config_yaml(const std::string& method, bool with_reference) {
     return yaml;
 }
 
-void test_builtin_function_loader_reads_coulomb_function() {
-    const auto path = write_temp_config("loader_builtin_coulomb", cube_config_yaml("wop", true));
-    const auto cfg = wop::config::load_config_file(path);
-
-    require(cfg.boundary.kind == wop::config::FunctionKind::Coulomb, "boundary kind mismatch");
-    require(close(cfg.boundary.source.x, 0.2), "boundary source.x mismatch");
-    require(close(cfg.boundary.source.y, -0.1), "boundary source.y mismatch");
-    require(close(cfg.boundary.source.z, 0.3), "boundary source.z mismatch");
-    require(cfg.reference.has_value(), "reference builtin should be present");
+void test_problem_functions_are_finite_on_reference_point() {
+    const wop::math::Vec3 p{3.0, 0.0, 0.0};
+    require(std::isfinite(wop::config::boundary_value(p)), "boundary_value must stay finite at x0");
+    if (wop::config::has_reference_value()) {
+        require(std::isfinite(wop::config::reference_value(p)), "reference_value must stay finite at x0");
+    }
 }
 
-void test_builtin_function_loader_rejects_unknown_kind() {
+std::vector<wop::geometry::Plane> unit_cube_planes() {
+    return {
+        {wop::math::Vec3{1.0, 0.0, 0.0}, wop::math::Vec3{1.0, 0.0, 0.0}},
+        {wop::math::Vec3{-1.0, 0.0, 0.0}, wop::math::Vec3{-1.0, 0.0, 0.0}},
+        {wop::math::Vec3{0.0, 1.0, 0.0}, wop::math::Vec3{0.0, 1.0, 0.0}},
+        {wop::math::Vec3{0.0, -1.0, 0.0}, wop::math::Vec3{0.0, -1.0, 0.0}},
+        {wop::math::Vec3{0.0, 0.0, 1.0}, wop::math::Vec3{0.0, 0.0, 1.0}},
+        {wop::math::Vec3{0.0, 0.0, -1.0}, wop::math::Vec3{0.0, 0.0, -1.0}},
+    };
+}
+
+wop::geometry::Polyhedron make_general_cube_polyhedron() {
+    auto poly = wop::geometry::build_polyhedron_from_planes(unit_cube_planes());
+    return wop::geometry::orient_normals(poly, wop::math::Vec3{0.0, 0.0, 0.0});
+}
+
+wop::geometry::Polyhedron make_axis_box_polyhedron() {
+    auto poly = wop::geometry::make_axis_aligned_box(
+        wop::math::Vec3{-1.0, -1.0, -1.0},
+        wop::math::Vec3{1.0, 1.0, 1.0});
+    return wop::geometry::orient_normals(poly, wop::math::Vec3{0.0, 0.0, 0.0});
+}
+
+void test_yaml_config_loader_accepts_config_without_boundary_section() {
+    const auto path = write_temp_config("loader_no_boundary", cube_config_yaml("wop"));
+    const auto cfg = wop::config::load_config_file(path);
+
+    require(cfg.method == wop::config::Method::Wop, "method mismatch");
+    require(cfg.geometry.planes.size() == 6, "plane count mismatch");
+    require(close(cfg.x0.x, 3.0) && close(cfg.x0.y, 0.0) && close(cfg.x0.z, 0.0), "x0 mismatch");
+    require(cfg.wop.has_value(), "wop section should be present");
+    require(!cfg.wos.has_value(), "wos section should not be present");
+}
+
+void test_yaml_config_loader_rejects_legacy_boundary_section() {
     const auto path = write_temp_config(
-        "loader_builtin_unknown",
+        "loader_legacy_boundary",
         "method: wop\n"
         "x0: [3.0, 0.0, 0.0]\n"
         "n: 10\n"
@@ -164,7 +188,7 @@ void test_builtin_function_loader_rejects_unknown_kind() {
         "    - p: [1.0, 0.0, 0.0]\n"
         "      nu: [1.0, 0.0, 0.0]\n"
         "boundary:\n"
-        "  kind: unknown\n"
+        "  kind: coulomb\n"
         "wop:\n"
         "  r_max: 10.0\n"
         "  r_max_mode: escape\n"
@@ -176,23 +200,11 @@ void test_builtin_function_loader_rejects_unknown_kind() {
     } catch (const std::invalid_argument&) {
         caught = true;
     }
-    require(caught, "loader should reject unknown builtin function kind");
-}
-
-void test_yaml_config_loader_reads_general_plane_geometry() {
-    const auto path = write_temp_config("loader_general_poly", cube_config_yaml("wop", true));
-    const auto cfg = wop::config::load_config_file(path);
-
-    require(cfg.method == wop::config::Method::Wop, "method mismatch");
-    require(cfg.geometry.planes.size() == 6, "plane count mismatch");
-    require(close(cfg.x0.x, 3.0) && close(cfg.x0.y, 0.0) && close(cfg.x0.z, 0.0), "x0 mismatch");
-    require(cfg.reference.has_value(), "reference function should be present");
-    require(cfg.wop.has_value(), "wop section should be present");
-    require(!cfg.wos.has_value(), "wos section should not be present");
+    require(caught, "loader should reject legacy boundary section");
 }
 
 void test_yaml_config_loader_allows_optional_command_metadata() {
-    const auto path = write_temp_config("loader_command_metadata", cube_config_yaml("wop", false));
+    const auto path = write_temp_config("loader_command_metadata", cube_config_yaml("wop"));
     const auto cfg = wop::config::load_config_file(path);
 
     require(cfg.method == wop::config::Method::Wop, "method mismatch for config with command metadata");
@@ -203,11 +215,18 @@ void test_example_configs_are_tuned_for_fast_runs(const char* argv0) {
     const auto examples = find_examples_dir(argv0);
     const auto wop_cfg = wop::config::load_config_file(examples / "box_wop.yaml");
     const auto wos_cfg = wop::config::load_config_file(examples / "box_wos.yaml");
+    const auto eq_cfg = wop::config::load_config_file(examples / "box_wop_legacy_equivalent.yaml");
 
     require(wop_cfg.method == wop::config::Method::Wop, "box_wop example must use WOP");
     require(wos_cfg.method == wop::config::Method::Wos, "box_wos example must use WoS");
-    require(wop_cfg.n <= 1000, "box_wop example must keep n small for interactive runs");
+    require(eq_cfg.method == wop::config::Method::Wop, "legacy-equivalent example must use WOP");
+    require(wop_cfg.n <= 50000, "box_wop example should stay interactive");
     require(wos_cfg.n <= 50000, "box_wos example should stay interactive");
+    require(eq_cfg.n == 50000, "legacy-equivalent example should mirror legacy sample count");
+    require(eq_cfg.max_steps == 1000000, "legacy-equivalent example should mirror legacy max_steps");
+    require(eq_cfg.wop.has_value(), "legacy-equivalent example must define WOP parameters");
+    require(eq_cfg.wop->r_max.has_value() && close(*eq_cfg.wop->r_max, 1e6), "legacy-equivalent r_max mismatch");
+    require(eq_cfg.wop->r_max_mode == wop::solver::RMaxMode::Escape, "legacy-equivalent mode must match CLI default");
 }
 
 void test_yaml_config_loader_rejects_missing_interior_point() {
@@ -222,8 +241,6 @@ void test_yaml_config_loader_rejects_missing_interior_point() {
         "  planes:\n"
         "    - p: [1.0, 0.0, 0.0]\n"
         "      nu: [1.0, 0.0, 0.0]\n"
-        "boundary:\n"
-        "  kind: x\n"
         "wop:\n"
         "  r_max: 10.0\n"
         "  r_max_mode: escape\n"
@@ -239,7 +256,7 @@ void test_yaml_config_loader_rejects_missing_interior_point() {
 }
 
 void test_run_config_wop_matches_direct_solver_statistics() {
-    const auto path = write_temp_config("runner_wop", cube_config_yaml("wop", true));
+    const auto path = write_temp_config("runner_wop", cube_config_yaml("wop"));
     const auto cfg = wop::config::load_config_file(path);
     const auto run = wop::config::run_config(cfg);
 
@@ -251,10 +268,9 @@ void test_run_config_wop_matches_direct_solver_statistics() {
     auto poly = wop::geometry::build_polyhedron_from_planes(planes);
     poly = wop::geometry::orient_normals(poly, cfg.geometry.interior_point);
 
-    const auto exact_u = [](const wop::math::Vec3& x) {
-        return 1.0 / wop::math::norm(x - wop::math::Vec3{0.2, -0.1, 0.3});
+    const auto boundary_f = [&](const wop::math::Vec3& y, std::optional<int>) {
+        return wop::config::boundary_value(y);
     };
-    const auto boundary_f = [&](const wop::math::Vec3& y, std::optional<int>) { return exact_u(y); };
 
     wop::rng::Rng rng(cfg.seed);
     const auto direct = wop::solver::estimate_wop(
@@ -273,12 +289,12 @@ void test_run_config_wop_matches_direct_solver_statistics() {
         cfg.wop->r_max_factor);
 
     require(close(run.estimate.J, direct.J, 1e-12), "config WOP J mismatch");
-    require(run.exact.has_value(), "config WOP should provide exact");
-    require(run.abs_error.has_value(), "config WOP should provide abs_error");
+    require(wop::config::has_reference_value() == run.exact.has_value(), "reference availability mismatch");
+    require(wop::config::has_reference_value() == run.abs_error.has_value(), "abs_error availability mismatch");
 }
 
 void test_run_config_wos_matches_direct_solver_statistics_without_reference() {
-    const auto path = write_temp_config("runner_wos", cube_config_yaml("wos", false));
+    const auto path = write_temp_config("runner_wos", cube_config_yaml("wos"));
     const auto cfg = wop::config::load_config_file(path);
     const auto run = wop::config::run_config(cfg);
 
@@ -290,10 +306,9 @@ void test_run_config_wos_matches_direct_solver_statistics_without_reference() {
     auto poly = wop::geometry::build_polyhedron_from_planes(planes);
     poly = wop::geometry::orient_normals(poly, cfg.geometry.interior_point);
 
-    const auto exact_u = [](const wop::math::Vec3& x) {
-        return 1.0 / wop::math::norm(x - wop::math::Vec3{0.2, -0.1, 0.3});
+    const auto boundary_f = [&](const wop::math::Vec3& y, std::optional<int>) {
+        return wop::config::boundary_value(y);
     };
-    const auto boundary_f = [&](const wop::math::Vec3& y, std::optional<int>) { return exact_u(y); };
 
     wop::rng::Rng rng(cfg.seed);
     const auto direct = wop::solver::estimate_wos(
@@ -309,12 +324,12 @@ void test_run_config_wos_matches_direct_solver_statistics_without_reference() {
         cfg.u_inf);
 
     require(close(run.estimate.J, direct.J, 1e-12), "config WoS J mismatch");
-    require(!run.exact.has_value(), "config WoS should omit exact when reference is absent");
-    require(!run.abs_error.has_value(), "config WoS should omit abs_error when reference is absent");
+    require(wop::config::has_reference_value() == run.exact.has_value(), "reference availability mismatch for WoS");
+    require(wop::config::has_reference_value() == run.abs_error.has_value(), "abs_error availability mismatch for WoS");
 }
 
 void test_cli_accepts_config_and_emits_json(const char* argv0) {
-    const auto cfg_path = write_temp_config("cli_wop", cube_config_yaml("wop", true));
+    const auto cfg_path = write_temp_config("cli_wop", cube_config_yaml("wop"));
     const auto cli_path = find_cli_binary(argv0);
     const std::string cmd =
         "cmd /C \"\"" + cli_path.string() + "\" --config \"" + cfg_path.string() + "\" --json\"";
@@ -325,19 +340,68 @@ void test_cli_accepts_config_and_emits_json(const char* argv0) {
     require(out.find("\"abs_error\":") != std::string::npos, "CLI JSON should contain abs_error");
 }
 
+void test_general_cube_matches_axis_aligned_box_under_identical_wop_parameters() {
+    const auto boundary_f = [&](const wop::math::Vec3& y, std::optional<int>) {
+        return wop::config::boundary_value(y);
+    };
+
+    const wop::math::Vec3 x0{3.0, 0.0, 0.0};
+    auto axis_box = make_axis_box_polyhedron();
+    auto general_cube = make_general_cube_polyhedron();
+
+    wop::rng::Rng rng_box(12345);
+    const auto box_result = wop::solver::estimate_wop(
+        axis_box,
+        x0,
+        boundary_f,
+        256,
+        rng_box,
+        std::nullopt,
+        std::nullopt,
+        1e-14,
+        200000,
+        0.0,
+        1e6,
+        wop::solver::RMaxMode::Project,
+        3.0);
+
+    wop::rng::Rng rng_general(12345);
+    const auto general_result = wop::solver::estimate_wop(
+        general_cube,
+        x0,
+        boundary_f,
+        256,
+        rng_general,
+        std::nullopt,
+        std::nullopt,
+        1e-14,
+        200000,
+        0.0,
+        1e6,
+        wop::solver::RMaxMode::Project,
+        3.0);
+
+    require(close(box_result.J, general_result.J, 1e-12), "box/general J mismatch");
+    require(close(box_result.S2, general_result.S2, 1e-12), "box/general S2 mismatch");
+    require(close(box_result.eps, general_result.eps, 1e-12), "box/general eps mismatch");
+    require(close(box_result.mean_steps, general_result.mean_steps, 1e-12), "box/general mean_steps mismatch");
+    require(box_result.n_truncated == general_result.n_truncated, "box/general n_truncated mismatch");
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
     try {
-        test_builtin_function_loader_reads_coulomb_function();
-        test_builtin_function_loader_rejects_unknown_kind();
-        test_yaml_config_loader_reads_general_plane_geometry();
+        test_problem_functions_are_finite_on_reference_point();
+        test_yaml_config_loader_accepts_config_without_boundary_section();
+        test_yaml_config_loader_rejects_legacy_boundary_section();
         test_yaml_config_loader_allows_optional_command_metadata();
         test_yaml_config_loader_rejects_missing_interior_point();
         test_example_configs_are_tuned_for_fast_runs(argc > 0 ? argv[0] : "");
         test_run_config_wop_matches_direct_solver_statistics();
         test_run_config_wos_matches_direct_solver_statistics_without_reference();
         test_cli_accepts_config_and_emits_json(argc > 0 ? argv[0] : "");
+        test_general_cube_matches_axis_aligned_box_under_identical_wop_parameters();
         std::cout << "wop_config_runtime_tests: OK\n";
         return 0;
     } catch (const std::exception& ex) {

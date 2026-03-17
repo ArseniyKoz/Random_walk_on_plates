@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include "wop/math/vec3.hpp"
@@ -37,20 +38,6 @@ struct WosConfig {
     double rho1_scale = 2.0;
 };
 
-enum class FunctionKind {
-    Constant,
-    X,
-    Y,
-    Z,
-    Coulomb,
-};
-
-struct FunctionConfig {
-    FunctionKind kind = FunctionKind::Constant;
-    double value = 0.0;
-    math::Vec3 source{};
-};
-
 struct RuntimeConfig {
     Method method = Method::Wop;
     math::Vec3 x0{};
@@ -59,8 +46,6 @@ struct RuntimeConfig {
     int max_steps = 0;
     double u_inf = 0.0;
     GeometryConfig geometry;
-    FunctionConfig boundary;
-    std::optional<FunctionConfig> reference = std::nullopt;
     std::optional<WopConfig> wop = std::nullopt;
     std::optional<WosConfig> wos = std::nullopt;
 };

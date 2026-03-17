@@ -57,9 +57,9 @@ Run the C++ CLI from YAML config:
 
 Ready-to-run YAML examples live in `../external_wop_cpp/examples/`.
 Each config includes a top-level `command:` field with the intended launch command.
-Config files now select built-in boundary functions from C++ code instead of
-parsing free-form formulas. The specialized `--example box` path is still
-faster than the general config path.
+Config files no longer define the boundary function. Instead, edit
+`../external_wop_cpp/app/problem_functions.cpp`, rebuild `wop_cli`, and then
+run the desired YAML config.
 
 Machine-readable output for regression checks:
 

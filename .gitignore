@@ -22,5 +22,16 @@ external_wop/.tmp_view_search.py
 
 # C++ build artifacts
 external_wop_cpp/build/
+external_wop_cpp/build_*/
 build/
 cmake-build-*/
+
+# Temp files
+tmp/
+external_wop_cpp/temp_*.yaml
+
+# Claude Code
+.claude/
+
+# Obsidian
+docs/.obsidian/
