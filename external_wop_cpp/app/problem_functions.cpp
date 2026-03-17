@@ -8,7 +8,7 @@ namespace {
 
 double coulomb_a(const math::Vec3& p) {
     const math::Vec3 a{0.2, -0.1, 0.3};
-    return 1.0 ;
+    return 1.0 / math::norm(p - a);
 }
 
 }  // namespace
