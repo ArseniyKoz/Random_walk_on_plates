@@ -81,7 +81,8 @@ void test_wop_escapes_immediately_on_rmax_boundary() {
         1e-14,
         1000,
         -7.0,
-        3.0);
+        3.0,
+        wop::solver::RMaxMode::Escape);
 
     require(tr.status == wop::estimation::TrajectoryStatus::Escaped, "trajectory should escape on r_max boundary");
     require(tr.steps == 0, "trajectory should escape before first move");

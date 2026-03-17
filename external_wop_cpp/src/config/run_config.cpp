@@ -116,6 +116,10 @@ std::string format_text_result(const ConfigRunResult& result) {
     out << "S2: " << result.estimate.S2 << "\n";
     out << "eps: " << result.estimate.eps << "\n";
     out << std::setprecision(2) << "mean_steps: " << result.estimate.mean_steps << "\n";
+    if (result.estimate.n_truncated > 0) {
+        out << "warning: " << result.estimate.n_truncated << "/" << result.estimate.n_total
+            << " trajectories truncated (timeout/escaped)\n";
+    }
     return out.str();
 }
 

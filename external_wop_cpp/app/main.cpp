@@ -30,7 +30,7 @@ struct CliArgs {
     double rho_scale = 1.0;
     double rho1_scale = 2.0;
     std::optional<double> r_max = 1e6;
-    wop::solver::RMaxMode r_max_mode = wop::solver::RMaxMode::Escape;
+    wop::solver::RMaxMode r_max_mode = wop::solver::RMaxMode::Project;
     double r_max_factor = 3.0;
     bool json = false;
     bool legacy_mode_args_used = false;

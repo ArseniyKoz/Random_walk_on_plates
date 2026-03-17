@@ -28,7 +28,7 @@ estimation::TrajectoryResult trace_wop_trajectory(
     int max_steps = 1'000'000,
     double u_inf = 0.0,
     std::optional<double> r_max = std::nullopt,
-    RMaxMode r_max_mode = RMaxMode::Escape,
+    RMaxMode r_max_mode = RMaxMode::Project,
     double r_max_factor = 3.0);
 
 estimation::EstimateResult estimate_wop(
@@ -43,7 +43,7 @@ estimation::EstimateResult estimate_wop(
     int max_steps = 1'000'000,
     double u_inf = 0.0,
     std::optional<double> r_max = std::nullopt,
-    RMaxMode r_max_mode = RMaxMode::Escape,
+    RMaxMode r_max_mode = RMaxMode::Project,
     double r_max_factor = 3.0);
 
 }  // namespace wop::solver

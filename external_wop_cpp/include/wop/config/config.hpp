@@ -28,7 +28,7 @@ struct GeometryConfig {
 
 struct WopConfig {
     std::optional<double> r_max = std::nullopt;
-    solver::RMaxMode r_max_mode = solver::RMaxMode::Escape;
+    solver::RMaxMode r_max_mode = solver::RMaxMode::Project;
     double r_max_factor = 3.0;
 };
 
