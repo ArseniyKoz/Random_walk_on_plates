@@ -20,6 +20,7 @@ add_library(wop_core STATIC
     src/rng/rng.cpp
     src/sampling/sampling.cpp
     src/estimation/estimation.cpp
+    src/solver/solver_common.cpp
     src/solver/wop_solver_internal.cpp
     src/solver/wop_solver.cpp
     src/solver/wos_solver.cpp

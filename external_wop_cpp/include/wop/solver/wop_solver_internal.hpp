@@ -7,6 +7,7 @@
 #include "wop/geometry/polyhedron.hpp"
 #include "wop/math/vec3.hpp"
 #include "wop/rng/rng.hpp"
+#include "wop/solver/solver_common.hpp"
 
 namespace wop::solver {
 
@@ -36,7 +37,6 @@ struct RMaxProjectionConfig {
     bool enabled = false;
     math::Vec3 center{};
     double rho = 0.0;
-    double rho_sq = 0.0;
     double rho1 = 0.0;
 };
 
@@ -46,11 +46,5 @@ RMaxProjectionConfig resolve_r_max_projection(
     std::optional<double> r_max,
     solver::RMaxMode r_max_mode,
     double r_max_factor);
-
-math::Vec3 sample_far_sphere_step(
-    const math::Vec3& x,
-    const math::Vec3& center,
-    double rho,
-    rng::Rng& rng);
 
 }  // namespace wop::solver::detail
