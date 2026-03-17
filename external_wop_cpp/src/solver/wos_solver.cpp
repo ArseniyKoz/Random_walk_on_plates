@@ -464,7 +464,7 @@ estimation::TrajectoryResult trace_wos_with_context(
         if (poly.is_inside_or_on(x, 0.0)) {
             const auto d = poly.signed_distances(x);
             const std::size_t i_hit = argmin_abs(d);
-            return estimation::TrajectoryResult{boundary_f(x, static_cast<int>(i_hit)), 0, "hit_face"};
+            return estimation::TrajectoryResult{boundary_f(x, static_cast<int>(i_hit)), 0, estimation::TrajectoryStatus::HitFace};
         }
         throw std::invalid_argument("x0 must belong to the exterior domain.");
     }
@@ -472,12 +472,12 @@ estimation::TrajectoryResult trace_wos_with_context(
     double eta = 1.0;
     for (int step = 1; step <= max_steps; ++step) {
         if (!math::is_finite(x) || !std::isfinite(eta)) {
-            return estimation::TrajectoryResult{u_inf, step - 1, "timeout"};
+            return estimation::TrajectoryResult{u_inf, step - 1, estimation::TrajectoryStatus::Timeout};
         }
 
         const ProjectionResult proj = project_to_polyhedron_boundary(ctx, x);
         if (proj.distance <= delta) {
-            return estimation::TrajectoryResult{eta * boundary_f(proj.point, std::nullopt), step, "hit_face"};
+            return estimation::TrajectoryResult{eta * boundary_f(proj.point, std::nullopt), step, estimation::TrajectoryStatus::HitFace};
         }
 
         const double r = math::norm(x - ctx.center);
@@ -490,7 +490,7 @@ estimation::TrajectoryResult trace_wos_with_context(
         }
     }
 
-    return estimation::TrajectoryResult{u_inf, max_steps, "timeout"};
+    return estimation::TrajectoryResult{u_inf, max_steps, estimation::TrajectoryStatus::Timeout};
 }
 
 }  // namespace

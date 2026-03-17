@@ -4,11 +4,12 @@
 #include <optional>
 #include <stdexcept>
 
+#include "wop/estimation/estimation.hpp"
+#include "wop/geometry/box.hpp"
 #include "wop/math/vec3.hpp"
 #include "wop/rng/rng.hpp"
 #include "wop/solver/wos_box_solver.hpp"
 #include "wop/solver/wos_solver.hpp"
-#include "wop/geometry/box.hpp"
 
 namespace {
 
@@ -37,7 +38,7 @@ void test_trajectory_stops_on_boundary_delta_neighborhood() {
         100000,
         0.0);
 
-    require(tr.status == "hit_face", "lecture WoS should stop via boundary neighborhood hit");
+    require(tr.status == wop::estimation::TrajectoryStatus::HitFace, "lecture WoS should stop via boundary neighborhood hit");
     require(tr.steps > 0, "trajectory should perform at least one step");
 }
 
@@ -60,7 +61,7 @@ void test_near_boundary_returns_boundary_value() {
         1000,
         0.0);
 
-    require(tr.status == "hit_face", "near-boundary WoS must terminate as hit_face");
+    require(tr.status == wop::estimation::TrajectoryStatus::HitFace, "near-boundary WoS must terminate as hit_face");
     require(tr.steps == 1, "near-boundary WoS must terminate on first step");
     require(std::abs(tr.value - 1.0) <= 1e-12, "boundary value must be evaluated at projected boundary point");
 }

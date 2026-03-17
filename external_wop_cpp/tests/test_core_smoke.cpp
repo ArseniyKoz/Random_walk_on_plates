@@ -83,16 +83,16 @@ void test_wop_escapes_immediately_on_rmax_boundary() {
         -7.0,
         3.0);
 
-    require(tr.status == "escaped", "trajectory should escape on r_max boundary");
+    require(tr.status == wop::estimation::TrajectoryStatus::Escaped, "trajectory should escape on r_max boundary");
     require(tr.steps == 0, "trajectory should escape before first move");
     require(close(tr.value, -7.0), "escaped trajectory should return u_inf");
 }
 
 void test_estimation_aggregator() {
     std::vector<wop::estimation::TrajectoryResult> tr = {
-        {1.0, 2, "hit_face"},
-        {2.0, 3, "timeout"},
-        {3.0, 4, "escaped"},
+        {1.0, 2, wop::estimation::TrajectoryStatus::HitFace},
+        {2.0, 3, wop::estimation::TrajectoryStatus::Timeout},
+        {3.0, 4, wop::estimation::TrajectoryStatus::Escaped},
     };
     std::size_t idx = 0;
     const auto result = wop::estimation::estimate_from_trajectories(3, [&]() {

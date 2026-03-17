@@ -4,6 +4,7 @@
 #include <optional>
 #include <stdexcept>
 
+#include "wop/estimation/estimation.hpp"
 #include "wop/geometry/box.hpp"
 #include "wop/math/vec3.hpp"
 #include "wop/solver/wop_solver.hpp"
@@ -51,7 +52,7 @@ void test_escape_mode_keeps_legacy_escape_behavior() {
         wop::solver::RMaxMode::Escape,
         3.0);
 
-    require(tr.status == "escaped", "escape mode must keep escaped truncation");
+    require(tr.status == wop::estimation::TrajectoryStatus::Escaped, "escape mode must keep escaped truncation");
     require(tr.steps == 0, "escape mode with |x0|>=r_max must truncate at step 0");
 }
 
@@ -74,7 +75,7 @@ void test_project_mode_does_not_escape_on_rmax_crossing() {
         wop::solver::RMaxMode::Project,
         3.0);
 
-    require(tr.status != "escaped", "project mode must not terminate as escaped on r_max crossing");
+    require(tr.status != wop::estimation::TrajectoryStatus::Escaped, "project mode must not terminate as escaped on r_max crossing");
 }
 
 void test_project_mode_autormax_is_enabled_when_rmax_is_none() {
@@ -96,7 +97,7 @@ void test_project_mode_autormax_is_enabled_when_rmax_is_none() {
         wop::solver::RMaxMode::Project,
         3.0);
 
-    require(tr.status != "escaped", "project mode with auto-r_max should avoid escaped on sphere crossing");
+    require(tr.status != wop::estimation::TrajectoryStatus::Escaped, "project mode with auto-r_max should avoid escaped on sphere crossing");
 }
 
 void test_manual_rmax_overrides_auto_rmax() {

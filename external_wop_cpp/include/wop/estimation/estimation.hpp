@@ -1,14 +1,24 @@
 #pragma once
 
 #include <functional>
-#include <string>
 
 namespace wop::estimation {
+
+enum class TrajectoryStatus { HitFace, Timeout, Escaped };
+
+inline const char* to_string(TrajectoryStatus s) noexcept {
+    switch (s) {
+        case TrajectoryStatus::HitFace:  return "hit_face";
+        case TrajectoryStatus::Timeout:  return "timeout";
+        case TrajectoryStatus::Escaped:  return "escaped";
+    }
+    return "unknown";
+}
 
 struct TrajectoryResult {
     double value = 0.0;
     int steps = 0;
-    std::string status;  // hit_face | timeout | escaped
+    TrajectoryStatus status = TrajectoryStatus::HitFace;
 };
 
 struct EstimateResult {

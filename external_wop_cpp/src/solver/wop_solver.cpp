@@ -56,30 +56,30 @@ estimation::TrajectoryResult trace_wop_trajectory(
             return estimation::TrajectoryResult{
                 weighted_boundary_value(boundary_f(x, static_cast<int>(i0))),
                 0,
-                "hit_face"};
+                estimation::TrajectoryStatus::HitFace};
         }
         throw std::invalid_argument("x0 must belong to the exterior domain.");
     }
 
     for (int step = 1; step <= max_steps; ++step) {
         if (!math::is_finite(x) || !std::isfinite(eta)) {
-            return estimation::TrajectoryResult{u_inf, step - 1, "escaped"};
+            return estimation::TrajectoryResult{u_inf, step - 1, estimation::TrajectoryStatus::Escaped};
         }
 
         if (r_max_proj.enabled) {
             const double r = math::norm(x - r_max_proj.center);
             if (!std::isfinite(r)) {
-                return estimation::TrajectoryResult{u_inf, step - 1, "escaped"};
+                return estimation::TrajectoryResult{u_inf, step - 1, estimation::TrajectoryStatus::Escaped};
             }
             if (r > r_max_proj.rho1) {
                 try {
                     x = detail::sample_far_sphere_step(x, r_max_proj.center, r_max_proj.rho, rng);
                 } catch (const std::runtime_error&) {
-                    return estimation::TrajectoryResult{u_inf, step, "timeout"};
+                    return estimation::TrajectoryResult{u_inf, step, estimation::TrajectoryStatus::Timeout};
                 }
                 eta *= (r_max_proj.rho / r);
                 if (!math::is_finite(x) || !std::isfinite(eta)) {
-                    return estimation::TrajectoryResult{u_inf, step, "escaped"};
+                    return estimation::TrajectoryResult{u_inf, step, estimation::TrajectoryStatus::Escaped};
                 }
                 try {
                     face_idx = poly.closest_outside_face_index(x, eps_in);
@@ -90,14 +90,14 @@ estimation::TrajectoryResult trace_wop_trajectory(
                         return estimation::TrajectoryResult{
                             weighted_boundary_value(boundary_f(x, static_cast<int>(scan.argmin_abs))),
                             step,
-                            "hit_face"};
+                            estimation::TrajectoryStatus::HitFace};
                     }
                     throw std::invalid_argument("Far-sphere sample must belong to the exterior domain.");
                 }
                 continue;
             }
         } else if (r_max_sq.has_value() && math::norm2(x) >= *r_max_sq) {
-            return estimation::TrajectoryResult{u_inf, step - 1, "escaped"};
+            return estimation::TrajectoryResult{u_inf, step - 1, estimation::TrajectoryStatus::Escaped};
         }
 
         math::Vec3 nu_i = nu[face_idx];
@@ -112,7 +112,7 @@ estimation::TrajectoryResult trace_wop_trajectory(
                 return estimation::TrajectoryResult{
                     weighted_boundary_value(boundary_f(x, static_cast<int>(i_hit))),
                     step - 1,
-                    "hit_face"};
+                    estimation::TrajectoryStatus::HitFace};
             }
             face_idx = scan_now.argmin_outside;
             nu_i = nu[face_idx];
@@ -124,7 +124,7 @@ estimation::TrajectoryResult trace_wop_trajectory(
         try {
             w = sampling::sample_tangent_direction(nu_i, rng, min_abs_denom);
         } catch (const std::runtime_error&) {
-            return estimation::TrajectoryResult{u_inf, step, "timeout"};
+            return estimation::TrajectoryResult{u_inf, step, estimation::TrajectoryStatus::Timeout};
         }
 
         const math::Vec3 p = x - d_i * nu_i;
@@ -132,7 +132,7 @@ estimation::TrajectoryResult trace_wop_trajectory(
         math::Vec3 y = p + rho * w;
         y = y - (math::dot(nu_i, y) - b_i) * nu_i;
         if (!math::is_finite(y)) {
-            return estimation::TrajectoryResult{u_inf, step, "escaped"};
+            return estimation::TrajectoryResult{u_inf, step, estimation::TrajectoryStatus::Escaped};
         }
 
         poly.signed_distances_inplace(y, d_buffer);
@@ -141,7 +141,7 @@ estimation::TrajectoryResult trace_wop_trajectory(
             return estimation::TrajectoryResult{
                 weighted_boundary_value(boundary_f(y, static_cast<int>(face_idx))),
                 step,
-                "hit_face"};
+                estimation::TrajectoryStatus::HitFace};
         }
 
         if (!scan.any_outside) {
@@ -149,14 +149,14 @@ estimation::TrajectoryResult trace_wop_trajectory(
             return estimation::TrajectoryResult{
                 weighted_boundary_value(boundary_f(y, static_cast<int>(i_hit))),
                 step,
-                "hit_face"};
+                estimation::TrajectoryStatus::HitFace};
         }
 
         face_idx = scan.argmin_outside;
         x = y;
     }
 
-    return estimation::TrajectoryResult{u_inf, max_steps, "timeout"};
+    return estimation::TrajectoryResult{u_inf, max_steps, estimation::TrajectoryStatus::Timeout};
 }
 
 estimation::EstimateResult estimate_wop(

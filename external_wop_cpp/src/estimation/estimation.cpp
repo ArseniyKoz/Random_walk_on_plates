@@ -1,6 +1,5 @@
 #include "wop/estimation/estimation.hpp"
 
-#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <stdexcept>
@@ -12,14 +11,15 @@ namespace {
 class EstimateAccumulator {
 public:
     void add(const TrajectoryResult& tr) {
-        const double ksi = tr.value;
-        j_sum_ += ksi;
-        s2_raw_sum_ += ksi * ksi;
+        ++count_;
+        const double delta = tr.value - mean_;
+        mean_ += delta / count_;
+        m2_ += delta * (tr.value - mean_);
         steps_sum_ += static_cast<std::int64_t>(tr.steps);
 
-        if (tr.status == "timeout") {
+        if (tr.status == TrajectoryStatus::Timeout) {
             ++n_timeout_;
-        } else if (tr.status == "escaped") {
+        } else if (tr.status == TrajectoryStatus::Escaped) {
             ++n_escaped_;
         }
     }
@@ -29,9 +29,8 @@ public:
             throw std::invalid_argument("n_total must be positive.");
         }
 
-        const double j = j_sum_ / static_cast<double>(n_total);
-        double s2 = s2_raw_sum_ / static_cast<double>(n_total) - j * j;
-        s2 = std::max(s2, 0.0);
+        const double j = mean_;
+        const double s2 = std::max(m2_ / static_cast<double>(n_total), 0.0);
         const double eps = 3.0 * std::sqrt(s2 / static_cast<double>(n_total));
         const int n_truncated = n_timeout_ + n_escaped_;
 
@@ -46,8 +45,9 @@ public:
     }
 
 private:
-    double j_sum_ = 0.0;
-    double s2_raw_sum_ = 0.0;
+    int count_ = 0;
+    double mean_ = 0.0;
+    double m2_ = 0.0;
     std::int64_t steps_sum_ = 0;
     int n_timeout_ = 0;
     int n_escaped_ = 0;
