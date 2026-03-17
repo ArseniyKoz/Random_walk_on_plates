@@ -241,7 +241,13 @@ $$
 \omega_{\min} := \min_{i \in \{1,\dots,m\}} \min_{z \in \overline{F_i}} \int_{K_i(z)} \frac{1}{2\pi(1+|w|^2)^{3/2}} \, dS(w) > 0.
 $$
 
-### 4.2. Режим `escape`: $\mathbb P_{x_0}(\tau_\Gamma \wedge \tau_R < \infty) = 1$
+### 4.2. Режим `escape`
+
+Ключевое утверждение раздела:
+
+$$
+\mathbb P_{x_0}(\tau_\Gamma \wedge \tau_R < \infty) = 1.
+$$
 
 Фиксируем $R > 0$ такое, что $Q \subset B(0,R)$. Определим
 
@@ -368,7 +374,13 @@ $$
 
 **Доказательство.** Геометрическое распределение имеет конечные моменты всех порядков: $\mathbb E[\sigma^k] \le \sum_{n=0}^\infty n^k (1-\alpha)^n < \infty$. □
 
-### 4.3. Режим `project`: $\mathbb P_{x_0}(\tau_\Gamma < \infty) = 1$
+### 4.3. Режим `project`
+
+Ключевое утверждение раздела:
+
+$$
+\mathbb P_{x_0}(\tau_\Gamma < \infty) = 1.
+$$
 
 В режиме `project` при $r = \|X_n - c\| > \rho_1$ выполняется far-sphere шаг, после которого $X_{n+1} \in S(c, \rho)$. Таким образом, блуждание периодически возвращается на сферу $S(c, \rho)$.
 
