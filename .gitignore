@@ -32,6 +32,7 @@ external_wop_cpp/temp_*.yaml
 
 # Claude Code
 .claude/
+CLAUDE.md
 
 # Obsidian
 docs/.obsidian/
