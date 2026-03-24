@@ -37,6 +37,7 @@
 4. [Алгоритм WoS](./wos-method.md)
 5. [Валидация И Тесты](./validation-and-tests.md)
 6. [Строгие Теоремы Для WoP: `escape` И `project`](./wop-proof-escape-project.md)
+7. [WoP: Постановка, Алгоритм И Теорема О Конечном Поглощении](wop-problem.md)
 
 ## Термины и обозначения
 
