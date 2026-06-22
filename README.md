@@ -1,144 +1,101 @@
-# WOP C++: `r_max` Escape vs Project
+# Walk on Planes / Walk on Spheres
 
-Этот файл описывает, как в C++ `wop_cli` работают режимы обработки дальнего поля:
+Проект про численное решение внешней задачи Дирихле для гармонической функции в трехмерной области вне выпуклого многогранника. Основная идея: сравнить и реализовать Monte Carlo подходы `Walk on Planes` и `Walk on Spheres`, довести их до C++/Python кода, CLI, тестов, notebooks и proof-oriented документации.
 
-- `escape`: траектория обрывается при достижении `r_max`;
-- `project`: используется weighted far-sphere correction (без геометрической проекции точки на сферу).
+## English Summary
 
-## Полная документация WoP/WoS
+This repository implements and documents Monte Carlo solvers for an exterior Dirichlet problem in 3D: Walk on Planes and Walk on Spheres. The public surface includes a C++ core, a Python reference implementation, CLI experiments, validation tests, notebooks, and proof-oriented notes for the far-field handling modes.
 
-Детальное описание общей C++-реализации (геометрия, плотности/сэмплинг, WoP, WoS, тесты) теперь вынесено в:
+## Что внутри
 
-- `docs/index.md`
+- `external_wop_cpp/` - основная C++ реализация: геометрия, sampling, WoP/WoS solvers, CLI и C++ tests.
+- `external_wop/` - Python reference implementation и pytest tests для проверки геометрии, sampling и parity с C++.
+- `docs/` - разбор постановки задачи, геометрии, распределений, алгоритмов, валидации и теорем.
+- `compare_wop_cpp_rmax_modes.ipynb`, `compare_wop_cpp_python.ipynb`, `wop-vs-wos-cpp-unit-cube.ipynb` - notebooks для сравнения режимов и реализаций.
 
-## Как работает `project` (детально)
+## Evidence
 
-### 1) Что задаёт CLI
+- **What this proves:** исследовательский алгоритм не оставлен в виде одного notebook; у него есть C++/Python реализации, тесты статистических инвариантов, CLI и документация по математике.
+- **Where to verify:** [docs/index.md](docs/index.md), [docs/validation-and-tests.md](docs/validation-and-tests.md), [docs/wop-proof-escape-project.md](docs/wop-proof-escape-project.md), [external_wop_cpp/tests](external_wop_cpp/tests), [external_wop/tests](external_wop/tests), [compare_wop_cpp_rmax_modes.ipynb](compare_wop_cpp_rmax_modes.ipynb).
+- **Limits:** это исследовательская ВКР-работа, а не production library API; часть экспериментов живет в notebooks, а численные результаты зависят от `n`, `seed` и выбранного режима дальнего поля.
 
-В `external_wop_cpp/app/main.cpp`:
+## Документация
 
-- `--r-max-mode` принимает `escape` или `project`;
-- `--r-max` парсится так: если значение `<= 0`, то это `std::nullopt`;
-- `--r-max-factor` должен быть `> 1.0`.
+Основная карта документации:
+
+- [Постановка и геометрия](docs/problem-and-geometry.md)
+- [Сэмплинг и плотности](docs/sampling-and-densities.md)
+- [Алгоритм WoP](docs/wop-method.md)
+- [Алгоритм WoS](docs/wos-method.md)
+- [Валидация и тесты](docs/validation-and-tests.md)
+- [Строгие теоремы для WoP: `escape` и `project`](docs/wop-proof-escape-project.md)
+- [WoP: постановка, алгоритм и теорема о конечном поглощении](docs/wop-problem.md)
+
+## Режимы дальнего поля в WoP
+
+C++ CLI поддерживает два режима обработки дальнего поля:
+
+- `escape` - траектория обрывается при достижении `r_max`;
+- `project` - используется weighted far-sphere correction без геометрической проекции точки на сферу.
 
 В режиме `project`:
 
 - `r_max` трактуется как базовый радиус `rho`;
-- `r_max_factor` трактуется как множитель для дальнего порога `rho1 = r_max_factor * rho`.
+- `r_max_factor` задает дальний порог `rho1 = r_max_factor * rho`;
+- при `--r-max 0` радиус `rho` выбирается автоматически из геометрии.
 
-При `--r-max 0` (то есть `nullopt`) `rho` выбирается автоматически из геометрии.
-
-### 2) Что происходит внутри solver
-
-В `trace_wop_trajectory(...)` (`external_wop_cpp/src/solver/wop_solver.cpp`):
-
-1. Для `escape` используется legacy-проверка `||x||^2 >= r_max^2 -> escaped`.
-2. Для `project` строится конфиг (`center`, `rho`, `rho1`).
-3. На шаге траектории:
-   - если `r = ||x-center|| > rho1`, выполняется far-sphere jump:
-     `x <- sample_far_sphere_step(x, center, rho, rng)`;
-   - обновляется вес `eta <- eta * (rho / r)`;
-   - обычный WOP-plane шаг продолжается уже из новой точки.
-4. При попадании на границу возвращается взвешенное значение:
+Ключевая формула возврата при попадании на границу:
 
 ```text
 u = u_inf + eta * (f(y) - u_inf)
 ```
 
-Именно эта формула убирает систематический bias, который был у старой геометрической проекции.
+Именно weighted-схема убирает систематический bias, который возникал у старой геометрической проекции.
 
-### 3) Как выбираются `rho` и `rho1`
+## Сборка C++ CLI
 
-В `resolve_r_max_projection(...)` (`external_wop_cpp/src/solver/wop_solver_internal.cpp`):
-
-- если `r_max` задан явно: `rho = r_max`, `rho1 = r_max_factor * rho`;
-- если `r_max` не задан:
-  - `rho` стартует от `r_max_factor * poly_radius`,
-  - затем поднимается минимум до `1.01 * dist(x0, center)` для устойчивого старта,
-  - `rho1 = r_max_factor * rho`.
-
-## Почему это корректнее старого `project`
-
-Старая схема «жёстко проецировать точку на сферу и идти дальше» меняла задачу и давала устойчивый сдвиг оценки.
-Новая схема использует вероятностную коррекцию с весом (как в far-field WoS-подходах), поэтому `J` остаётся согласованным с `exact` при росте `n`.
-
-## Сборка `wop_cli`
-
-```powershell
+```bash
 cmake -S external_wop_cpp -B external_wop_cpp/build_compare_modes -DCMAKE_BUILD_TYPE=Release -DWOP_BUILD_TESTS=OFF
 cmake --build external_wop_cpp/build_compare_modes --config Release
 ```
 
-Бинарник (Windows): `external_wop_cpp/build_compare_modes/Release/wop_cli.exe`
+Типичные пути к бинарнику:
+
+- Linux/macOS: `external_wop_cpp/build_compare_modes/wop_cli`
+- Windows: `external_wop_cpp/build_compare_modes/Release/wop_cli.exe`
 
 ## Примеры запуска
 
-### 1) Стандартный режим `escape` (обрыв)
+### WoP: `escape`
 
-```powershell
-external_wop_cpp/build_compare_modes/Release/wop_cli.exe `
-  --method wop --example box --x0 "3 0 0" --n 50000 --seed 12345 `
+```bash
+external_wop_cpp/build_compare_modes/wop_cli \
+  --method wop --example box --x0 "3 0 0" --n 50000 --seed 12345 \
   --r-max-mode escape --r-max 1000000 --json
 ```
 
-### 2) `project` с фиксированным `r_max` (ручной радиус)
+### WoP: `project` с ручным радиусом
 
-```powershell
-external_wop_cpp/build_compare_modes/Release/wop_cli.exe `
-  --method wop --example box --x0 "3 0 0" --n 50000 --seed 12345 `
+```bash
+external_wop_cpp/build_compare_modes/wop_cli \
+  --method wop --example box --x0 "3 0 0" --n 50000 --seed 12345 \
   --r-max-mode project --r-max 2.5 --r-max-factor 2.0 --json
 ```
 
-Здесь `r_max` это `rho`, а `r_max-factor` задаёт `rho1/rho`.
+### WoP: `project` с auto `r_max`
 
-### 3) `project` с auto `r_max`
-
-```powershell
-external_wop_cpp/build_compare_modes/Release/wop_cli.exe `
-  --method wop --example box --x0 "3 0 0" --n 50000 --seed 12345 `
+```bash
+external_wop_cpp/build_compare_modes/wop_cli \
+  --method wop --example box --x0 "3 0 0" --n 50000 --seed 12345 \
   --r-max-mode project --r-max 0 --r-max-factor 2.0 --json
+```
 
-### 4) WoS режим для сопоставления с WOP
+### WoS для сопоставления
 
-```powershell
-external_wop_cpp/build_compare_modes/Release/wop_cli.exe `
-  --method wos --example box --x0 "3 0 0" --n 50000 --seed 12345 `
+```bash
+external_wop_cpp/build_compare_modes/wop_cli \
+  --method wos --example box --x0 "3 0 0" --n 50000 --seed 12345 \
   --delta 1e-3 --rho-scale 1.0 --rho1-scale 2.0 --json
 ```
-```
 
-Ключевой момент: `--r-max 0` => `nullopt` => `rho` вычисляется автоматически.
-
-### 4) Быстрое сравнение `escape` vs `project` в PowerShell
-
-```powershell
-$cli = "external_wop_cpp/build_compare_modes/Release/wop_cli.exe"
-
-$escape = & $cli --method wop --example box --x0 "3 0 0" --n 100000 --seed 314159 `
-  --r-max-mode escape --r-max 1000000 --json | ConvertFrom-Json
-
-$project = & $cli --method wop --example box --x0 "3 0 0" --n 100000 --seed 314159 `
-  --r-max-mode project --r-max 0 --r-max-factor 2.0 --json | ConvertFrom-Json
-
-[pscustomobject]@{
-  J_escape = $escape.J
-  J_project = $project.J
-  abs_error_escape = $escape.abs_error
-  abs_error_project = $project.abs_error
-  n_truncated_escape = $escape.n_truncated
-  n_truncated_project = $project.n_truncated
-  runtime_note = "runtime измеряй внешним таймером (Measure-Command)"
-}
-```
-
-## Готовый notebook для сравнения
-
-Для систематического сравнения запусти:
-
-- `compare_wop_cpp_rmax_modes.ipynb`
-
-Там уже есть:
-
-- sanity checks (tests-first),
-- матрица запусков по `n` и `seed`,
-- таблицы и графики для `escape` vs `project`.
+Для систематического сравнения режимов используй [compare_wop_cpp_rmax_modes.ipynb](compare_wop_cpp_rmax_modes.ipynb). В notebook собраны sanity checks, матрица запусков по `n` и `seed`, таблицы и графики для `escape` vs `project`.
